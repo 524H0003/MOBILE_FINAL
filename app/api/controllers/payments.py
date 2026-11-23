@@ -42,9 +42,7 @@ class PaymentController(BaseController):  # type: ignore[misc]
         return map_payment(payment)
 
     @typed_get("/{order_id}/payments")
-    async def get_payment(
-        self, order_id: UUID, session: DbSession, current_user: CurrentUser
-    ) -> PaymentResponse:
+    async def get_payment(self, order_id: UUID, session: DbSession, current_user: CurrentUser) -> PaymentResponse:
         """Get payment for an order."""
         service = PaymentService(session)
         payment = await service.get_payment_by_order(order_id)
@@ -53,9 +51,7 @@ class PaymentController(BaseController):  # type: ignore[misc]
         return map_payment(payment)
 
     @typed_post("/payments/{payment_id}/confirm")
-    async def confirm_payment(
-        self, payment_id: UUID, session: DbSession, current_user: CurrentUser
-    ) -> PaymentResponse:
+    async def confirm_payment(self, payment_id: UUID, session: DbSession, current_user: CurrentUser) -> PaymentResponse:
         """Confirm a payment."""
         service = PaymentService(session)
         try:
@@ -65,9 +61,7 @@ class PaymentController(BaseController):  # type: ignore[misc]
         return map_payment(payment)
 
     @typed_post("/payments/{payment_id}/refund")
-    async def refund_payment(
-        self, payment_id: UUID, session: DbSession, current_user: CurrentUser
-    ) -> PaymentResponse:
+    async def refund_payment(self, payment_id: UUID, session: DbSession, current_user: CurrentUser) -> PaymentResponse:
         """Refund a payment."""
         service = PaymentService(session)
         try:

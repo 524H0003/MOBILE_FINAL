@@ -52,12 +52,8 @@ class User(Base, TimestampMixin):
     restaurants: Mapped[list[Restaurant]] = relationship(
         "Restaurant", back_populates="owner", cascade="all, delete-orphan"
     )
-    orders: Mapped[list[Order]] = relationship(
-        "Order", back_populates="customer", cascade="all, delete-orphan"
-    )
-    reviews: Mapped[list[Review]] = relationship(
-        "Review", back_populates="customer", cascade="all, delete-orphan"
-    )
+    orders: Mapped[list[Order]] = relationship("Order", back_populates="customer", cascade="all, delete-orphan")
+    reviews: Mapped[list[Review]] = relationship("Review", back_populates="customer", cascade="all, delete-orphan")
 
 
 class Restaurant(Base, TimestampMixin):
@@ -98,12 +94,8 @@ class Restaurant(Base, TimestampMixin):
     promotions: Mapped[list[Promotion]] = relationship(
         "Promotion", back_populates="restaurant", cascade="all, delete-orphan"
     )
-    orders: Mapped[list[Order]] = relationship(
-        "Order", back_populates="restaurant", cascade="all, delete-orphan"
-    )
-    reviews: Mapped[list[Review]] = relationship(
-        "Review", back_populates="restaurant", cascade="all, delete-orphan"
-    )
+    orders: Mapped[list[Order]] = relationship("Order", back_populates="restaurant", cascade="all, delete-orphan")
+    reviews: Mapped[list[Review]] = relationship("Review", back_populates="restaurant", cascade="all, delete-orphan")
 
 
 class Category(Base, TimestampMixin):
@@ -190,9 +182,7 @@ class Order(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     restaurant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("restaurants.id"), nullable=False)
-    status: Mapped[OrderStatus] = mapped_column(
-        Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False
-    )
+    status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     delivery_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -218,9 +208,7 @@ class Order(Base, TimestampMixin):
     customer: Mapped[User] = relationship("User", back_populates="orders")
     restaurant: Mapped[Restaurant] = relationship("Restaurant", back_populates="orders")
     promotion: Mapped[Promotion | None] = relationship("Promotion", back_populates="orders")
-    items: Mapped[list[OrderItem]] = relationship(
-        "OrderItem", back_populates="order", cascade="all, delete-orphan"
-    )
+    items: Mapped[list[OrderItem]] = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     payment: Mapped[Payment | None] = relationship(
         "Payment", back_populates="order", uselist=False, cascade="all, delete-orphan"
     )
@@ -255,9 +243,7 @@ class Payment(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"), nullable=False, unique=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    status: Mapped[PaymentStatus] = mapped_column(
-        Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False
-    )
+    status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
     provider: Mapped[str] = mapped_column(String(50), nullable=False, default="MOCK")
     provider_transaction_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_response: Mapped[str | None] = mapped_column(Text, nullable=True)

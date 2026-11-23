@@ -121,28 +121,17 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         return model
 
     async def get(self, entity_id: uuid.UUID) -> DomainOrder | None:
-        stmt = (
-            select(OrderModel)
-            .options(selectinload(OrderModel.items))
-            .where(OrderModel.id == entity_id)
-        )
+        stmt = select(OrderModel).options(selectinload(OrderModel.items)).where(OrderModel.id == entity_id)
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return self._to_domain(model) if model else None
 
     async def list_all(self, *, limit: int = 100, offset: int = 0) -> list[DomainOrder]:
-        stmt = (
-            select(OrderModel)
-            .options(selectinload(OrderModel.items))
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = select(OrderModel).options(selectinload(OrderModel.items)).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().unique().all()]
 
-    async def get_by_customer(
-        self, customer_id: uuid.UUID, *, limit: int = 100, offset: int = 0
-    ) -> list[DomainOrder]:
+    async def get_by_customer(self, customer_id: uuid.UUID, *, limit: int = 100, offset: int = 0) -> list[DomainOrder]:
         stmt = (
             select(OrderModel)
             .options(selectinload(OrderModel.items))
@@ -168,9 +157,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().unique().all()]
 
-    async def get_by_status(
-        self, status: OrderStatus, *, limit: int = 100, offset: int = 0
-    ) -> list[DomainOrder]:
+    async def get_by_status(self, status: OrderStatus, *, limit: int = 100, offset: int = 0) -> list[DomainOrder]:
         stmt = (
             select(OrderModel)
             .options(selectinload(OrderModel.items))

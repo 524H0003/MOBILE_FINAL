@@ -49,9 +49,7 @@ def typed_delete(path: str) -> Callable[[F], F]:
     return cast(Callable[[F], F], controller.delete(path))
 
 
-async def _ensure_restaurant_owner(
-    session: DbSession, restaurant_id: UUID, current_user: Any
-) -> None:
+async def _ensure_restaurant_owner(session: DbSession, restaurant_id: UUID, current_user: Any) -> None:
     """Ensure current user owns the restaurant."""
     repo = RestaurantRepository(session)
     restaurant = await repo.get(restaurant_id)
@@ -113,9 +111,7 @@ class MenuController(BaseController):  # type: ignore[misc]
         return map_category(saved)
 
     @typed_delete("/categories/{category_id}")
-    async def delete_category(
-        self, category_id: UUID, session: DbSession, current_user: CurrentUser
-    ) -> dict[str, str]:
+    async def delete_category(self, category_id: UUID, session: DbSession, current_user: CurrentUser) -> dict[str, str]:
         """Delete a category."""
         repo = CategoryRepository(session)
         category = await repo.get(category_id)
@@ -190,9 +186,7 @@ class MenuController(BaseController):  # type: ignore[misc]
         return map_menu_item(saved)
 
     @typed_delete("/items/{item_id}")
-    async def delete_menu_item(
-        self, item_id: UUID, session: DbSession, current_user: CurrentUser
-    ) -> dict[str, str]:
+    async def delete_menu_item(self, item_id: UUID, session: DbSession, current_user: CurrentUser) -> dict[str, str]:
         """Delete a menu item."""
         repo = MenuItemRepository(session)
         item = await repo.get(item_id)

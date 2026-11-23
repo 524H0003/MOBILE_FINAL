@@ -33,9 +33,7 @@ class DeliveryRepository(BaseRepository[DomainDelivery, DeliveryModel]):
             driver_phone=phone_optional(model.driver_phone),
             driver_vehicle=model.driver_vehicle,
             driver_license_plate=model.driver_license_plate,
-            driver_current_location=coordinates(
-                model.driver_current_latitude, model.driver_current_longitude
-            ),
+            driver_current_location=coordinates(model.driver_current_latitude, model.driver_current_longitude),
             pickup_address=address(
                 street=model.pickup_street,
                 ward=model.pickup_ward,
@@ -113,14 +111,7 @@ class DeliveryRepository(BaseRepository[DomainDelivery, DeliveryModel]):
         model = result.scalar_one_or_none()
         return self._to_domain(model) if model else None
 
-    async def get_by_status(
-        self, status: DeliveryStatus, *, limit: int = 100, offset: int = 0
-    ) -> list[DomainDelivery]:
-        stmt = (
-            select(DeliveryModel)
-            .where(DeliveryModel.status == status)
-            .limit(limit)
-            .offset(offset)
-        )
+    async def get_by_status(self, status: DeliveryStatus, *, limit: int = 100, offset: int = 0) -> list[DomainDelivery]:
+        stmt = select(DeliveryModel).where(DeliveryModel.status == status).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().all()]

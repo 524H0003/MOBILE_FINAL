@@ -40,17 +40,13 @@ class MockNotificationAdapter:
         self, *, user_id: uuid.UUID, order_id: uuid.UUID, status: OrderStatus
     ) -> NotificationResult:
         """Send mock order status notification."""
-        return NotificationResult(
-            success=True, message_id=f"MOCK-ORDER-{order_id.hex[:12].upper()}-{status.value}"
-        )
+        return NotificationResult(success=True, message_id=f"MOCK-ORDER-{order_id.hex[:12].upper()}-{status.value}")
 
     async def send_delivery_status(
         self, *, user_id: uuid.UUID, order_id: uuid.UUID, status: DeliveryStatus
     ) -> NotificationResult:
         """Send mock delivery status notification."""
-        return NotificationResult(
-            success=True, message_id=f"MOCK-DELIVERY-{order_id.hex[:12].upper()}-{status.value}"
-        )
+        return NotificationResult(success=True, message_id=f"MOCK-DELIVERY-{order_id.hex[:12].upper()}-{status.value}")
 
 
 def get_notification_adapter() -> NotificationAdapter:

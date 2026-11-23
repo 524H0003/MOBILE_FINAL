@@ -36,9 +36,7 @@ class DeliveryController(BaseController):  # type: ignore[misc]
     """Delivery endpoints."""
 
     @typed_get("/{order_id}/delivery")
-    async def get_delivery(
-        self, order_id: UUID, session: DbSession, current_user: CurrentUser
-    ) -> DeliveryResponse:
+    async def get_delivery(self, order_id: UUID, session: DbSession, current_user: CurrentUser) -> DeliveryResponse:
         """Get delivery for an order."""
         service = DeliveryService(session)
         delivery = await service.get_delivery_by_order(order_id)

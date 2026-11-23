@@ -50,9 +50,7 @@ class RestaurantController(BaseController):  # type: ignore[misc]
     """Restaurant endpoints."""
 
     @typed_get("/")
-    async def list_restaurants(
-        self, session: DbSession, pagination: PaginationDep
-    ) -> Page[RestaurantSummaryResponse]:
+    async def list_restaurants(self, session: DbSession, pagination: PaginationDep) -> Page[RestaurantSummaryResponse]:
         """List active restaurants."""
         repo = RestaurantRepository(session)
         restaurants = await repo.list_active(limit=pagination.limit, offset=pagination.offset)
@@ -64,9 +62,7 @@ class RestaurantController(BaseController):  # type: ignore[misc]
         )
 
     @typed_get("/{restaurant_id}")
-    async def get_restaurant(
-        self, restaurant_id: UUID, session: DbSession
-    ) -> RestaurantResponse:
+    async def get_restaurant(self, restaurant_id: UUID, session: DbSession) -> RestaurantResponse:
         """Get restaurant by ID."""
         repo = RestaurantRepository(session)
         restaurant = await repo.get(restaurant_id)

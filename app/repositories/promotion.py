@@ -53,9 +53,7 @@ class PromotionRepository(BaseRepository[DomainPromotion, PromotionModel]):
             type=entity.type,
             value=entity.value,
             min_order_amount=entity.min_order_amount.amount if entity.min_order_amount else None,
-            max_discount_amount=(
-                entity.max_discount_amount.amount if entity.max_discount_amount else None
-            ),
+            max_discount_amount=(entity.max_discount_amount.amount if entity.max_discount_amount else None),
             usage_limit=entity.usage_limit,
             usage_count=entity.usage_count,
             user_usage_limit=entity.user_usage_limit,
@@ -69,12 +67,7 @@ class PromotionRepository(BaseRepository[DomainPromotion, PromotionModel]):
     async def get_by_restaurant(
         self, restaurant_id: uuid.UUID, *, limit: int = 100, offset: int = 0
     ) -> list[DomainPromotion]:
-        stmt = (
-            select(PromotionModel)
-            .where(PromotionModel.restaurant_id == restaurant_id)
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = select(PromotionModel).where(PromotionModel.restaurant_id == restaurant_id).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().all()]
 

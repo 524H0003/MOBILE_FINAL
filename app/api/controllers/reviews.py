@@ -55,9 +55,7 @@ class ReviewController(BaseController):  # type: ignore[misc]
     ) -> Page[ReviewResponse]:
         """List reviews for a restaurant."""
         service = ReviewService(session)
-        reviews = await service.get_restaurant_reviews(
-            restaurant_id, limit=pagination.limit, offset=pagination.offset
-        )
+        reviews = await service.get_restaurant_reviews(restaurant_id, limit=pagination.limit, offset=pagination.offset)
         return map_page(
             [map_review(r) for r in reviews],
             total=len(reviews),

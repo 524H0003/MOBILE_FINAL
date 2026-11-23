@@ -95,9 +95,7 @@ class AuthService:
 
         return access_token, new_refresh_token
 
-    async def change_password(
-        self, *, user_id: uuid.UUID, current_password: str, new_password: str
-    ) -> None:
+    async def change_password(self, *, user_id: uuid.UUID, current_password: str, new_password: str) -> None:
         """Change user password."""
         user = await self._user_repo.get(user_id)
         if not user:

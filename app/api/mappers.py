@@ -284,7 +284,9 @@ def map_payment(payment: Payment) -> PaymentResponse:
     return PaymentResponse(
         id=payment.id,
         order_id=payment.order_id,
-        method=PaymentMethod(payment.provider) if payment.provider in PaymentMethod._value2member_map_ else PaymentMethod.CASH,
+        method=PaymentMethod(payment.provider)
+        if payment.provider in PaymentMethod._value2member_map_
+        else PaymentMethod.CASH,
         amount=_money(payment.amount),
         status=payment.status,
         transaction_id=payment.provider_transaction_id,

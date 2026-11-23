@@ -76,6 +76,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    return Settings(
-        secret_key="your-super-secret-key-change-in-production-min-32-chars"
-    )
+    return Settings(secret_key="your-super-secret-key-change-in-production-min-32-chars")

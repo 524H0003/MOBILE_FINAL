@@ -78,8 +78,7 @@ class DeliveryService:
                     latitude=restaurant.address.latitude,
                     longitude=restaurant.address.longitude,
                 )
-                if restaurant.address.latitude is not None
-                and restaurant.address.longitude is not None
+                if restaurant.address.latitude is not None and restaurant.address.longitude is not None
                 else None
             ),
             dropoff_address=order.delivery_address,
@@ -106,9 +105,7 @@ class DeliveryService:
         saved_delivery.status = booking.status
         saved_delivery.driver_name = booking.driver_name
         saved_delivery.driver_phone = (
-            PhoneNumber(number=PhoneNumber.normalize(booking.driver_phone))
-            if booking.driver_phone
-            else None
+            PhoneNumber(number=PhoneNumber.normalize(booking.driver_phone)) if booking.driver_phone else None
         )
         saved_delivery.driver_vehicle = booking.driver_vehicle
         saved_delivery.driver_license_plate = booking.driver_license_plate
@@ -125,9 +122,7 @@ class DeliveryService:
         """Get delivery by order ID."""
         return await self._delivery_repo.get_by_order(order_id)
 
-    async def update_delivery_status(
-        self, delivery_id: uuid.UUID, new_status: DeliveryStatus
-    ) -> DomainDelivery:
+    async def update_delivery_status(self, delivery_id: uuid.UUID, new_status: DeliveryStatus) -> DomainDelivery:
         """Update delivery status."""
         delivery = await self._delivery_repo.get(delivery_id)
         if not delivery:

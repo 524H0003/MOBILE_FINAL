@@ -22,9 +22,7 @@ class PaymentResult:
 class PaymentGatewayAdapter(Protocol):
     """Protocol for payment gateway adapters."""
 
-    async def create_payment(
-        self, *, order_id: uuid.UUID, amount: Decimal, method: PaymentMethod
-    ) -> PaymentResult:
+    async def create_payment(self, *, order_id: uuid.UUID, amount: Decimal, method: PaymentMethod) -> PaymentResult:
         """Create payment intent."""
         ...
 
@@ -40,9 +38,7 @@ class PaymentGatewayAdapter(Protocol):
 class MockPaymentAdapter:
     """Mock payment gateway adapter for development/testing."""
 
-    async def create_payment(
-        self, *, order_id: uuid.UUID, amount: Decimal, method: PaymentMethod
-    ) -> PaymentResult:
+    async def create_payment(self, *, order_id: uuid.UUID, amount: Decimal, method: PaymentMethod) -> PaymentResult:
         """Create mock payment intent."""
         transaction_id = f"MOCK-PAY-{order_id.hex[:12].upper()}"
         return PaymentResult(

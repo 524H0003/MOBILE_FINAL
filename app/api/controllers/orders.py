@@ -56,9 +56,7 @@ class OrderController(BaseController):  # type: ignore[misc]
     """Order endpoints."""
 
     @typed_post("/")
-    async def create_order(
-        self, request: OrderCreate, session: DbSession, current_user: CurrentUser
-    ) -> OrderResponse:
+    async def create_order(self, request: OrderCreate, session: DbSession, current_user: CurrentUser) -> OrderResponse:
         """Create a new order."""
         service = OrderService(session)
         items: list[OrderItemInput] = [
@@ -123,9 +121,7 @@ class OrderController(BaseController):  # type: ignore[misc]
         mapped: list[OrderSummaryResponse] = []
         for order in orders:
             restaurant_name, payment_status = await _order_response_context(session, order)
-            mapped.append(
-                map_order_summary(order, restaurant_name=restaurant_name, payment_status=payment_status)
-            )
+            mapped.append(map_order_summary(order, restaurant_name=restaurant_name, payment_status=payment_status))
         return map_page(mapped, total=len(orders), page=pagination.page, size=pagination.limit)
 
     @typed_patch("/{order_id}/status")
@@ -148,9 +144,7 @@ class OrderController(BaseController):  # type: ignore[misc]
         return map_order(order, restaurant_name=restaurant_name, payment_status=payment_status)
 
     @typed_post("/{order_id}/reorder")
-    async def reorder(
-        self, order_id: UUID, session: DbSession, current_user: CurrentUser
-    ) -> OrderResponse:
+    async def reorder(self, order_id: UUID, session: DbSession, current_user: CurrentUser) -> OrderResponse:
         """Reorder a previous delivered order."""
         service = OrderService(session)
         try:

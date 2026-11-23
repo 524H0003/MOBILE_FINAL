@@ -77,24 +77,12 @@ class RestaurantRepository(BaseRepository[DomainRestaurant, RestaurantModel]):
             total_reviews=entity.total_reviews,
         )
 
-    async def get_by_owner(
-        self, owner_id: uuid.UUID, *, limit: int = 100, offset: int = 0
-    ) -> list[DomainRestaurant]:
-        stmt = (
-            select(RestaurantModel)
-            .where(RestaurantModel.owner_id == owner_id)
-            .limit(limit)
-            .offset(offset)
-        )
+    async def get_by_owner(self, owner_id: uuid.UUID, *, limit: int = 100, offset: int = 0) -> list[DomainRestaurant]:
+        stmt = select(RestaurantModel).where(RestaurantModel.owner_id == owner_id).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().all()]
 
     async def list_active(self, *, limit: int = 100, offset: int = 0) -> list[DomainRestaurant]:
-        stmt = (
-            select(RestaurantModel)
-            .where(RestaurantModel.is_active.is_(True))
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = select(RestaurantModel).where(RestaurantModel.is_active.is_(True)).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().all()]

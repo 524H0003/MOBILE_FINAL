@@ -105,9 +105,7 @@ class OrderService:
             promo = next((p for p in promotions if p.name == promotion_code), None)
             if promo and promo.is_valid():
                 if promo.min_order_amount and subtotal < promo.min_order_amount.amount:
-                    raise ValueError(
-                        f"Minimum order amount for this promotion is {promo.min_order_amount}"
-                    )
+                    raise ValueError(f"Minimum order amount for this promotion is {promo.min_order_amount}")
                 if promo.type == PromotionType.PERCENTAGE:
                     discount_amount = subtotal * (promo.value / Decimal("100"))
                     if promo.max_discount_amount:

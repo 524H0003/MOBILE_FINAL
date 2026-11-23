@@ -22,9 +22,7 @@ class PaymentService:
         self._payment_repo = PaymentRepository(session)
         self._order_repo = OrderRepository(session)
 
-    async def create_payment(
-        self, *, order_id: uuid.UUID, method: PaymentMethod
-    ) -> DomainPayment:
+    async def create_payment(self, *, order_id: uuid.UUID, method: PaymentMethod) -> DomainPayment:
         """Create payment for an order."""
         existing = await self._payment_repo.get_by_order(order_id)
         if existing:
@@ -35,9 +33,7 @@ class PaymentService:
             raise ValueError("Order not found")
 
         adapter = get_payment_adapter()
-        result = await adapter.create_payment(
-            order_id=order_id, amount=order.total_amount.amount, method=method
-        )
+        result = await adapter.create_payment(order_id=order_id, amount=order.total_amount.amount, method=method)
 
         payment = DomainPayment(
             order_id=order_id,
@@ -62,9 +58,7 @@ class PaymentService:
         if not payment.provider_transaction_id:
             raise ValueError("Payment has no transaction ID")
 
-        result = await adapter.confirm_payment(
-            transaction_id=payment.provider_transaction_id
-        )
+        result = await adapter.confirm_payment(transaction_id=payment.provider_transaction_id)
         payment.status = result.status
         payment.provider_response = result.provider_response
         if result.status == PaymentStatus.COMPLETED:

@@ -35,9 +35,7 @@ class AuthController(BaseController):  # type: ignore[misc]
     """Authentication endpoints."""
 
     @typed_post("/register")
-    async def register(
-        self, request: RegisterRequest, session: DbSession
-    ) -> UserProfileResponse:
+    async def register(self, request: RegisterRequest, session: DbSession) -> UserProfileResponse:
         """Register a new user."""
         service = AuthService(session)
         try:
@@ -58,13 +56,9 @@ class AuthController(BaseController):  # type: ignore[misc]
         """Login and get tokens."""
         service = AuthService(session)
         try:
-            access_token, refresh_token, _ = await service.login(
-                email=str(request.email), password=request.password
-            )
+            access_token, refresh_token, _ = await service.login(email=str(request.email), password=request.password)
         except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials") from exc
 
         return TokenResponse(
             access_token=access_token,
@@ -78,13 +72,9 @@ class AuthController(BaseController):  # type: ignore[misc]
         """Refresh access token."""
         service = AuthService(session)
         try:
-            access_token, refresh_token = await service.refresh_tokens(
-                refresh_token=request.refresh_token
-            )
+            access_token, refresh_token = await service.refresh_tokens(refresh_token=request.refresh_token)
         except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
 
         return TokenResponse(
             access_token=access_token,

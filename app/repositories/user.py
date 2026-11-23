@@ -60,9 +60,7 @@ class UserRepository(BaseRepository[DomainUser, UserModel]):
         model = result.scalar_one_or_none()
         return self._to_domain(model) if model else None
 
-    async def get_by_role(
-        self, role: UserRole, *, limit: int = 100, offset: int = 0
-    ) -> list[DomainUser]:
+    async def get_by_role(self, role: UserRole, *, limit: int = 100, offset: int = 0) -> list[DomainUser]:
         stmt = select(UserModel).where(UserModel.role == role).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().all()]
