@@ -66,6 +66,25 @@ def test_docs_routes_are_enabled() -> None:
     assert ("GET", "/openapi.json") in routes
 
 
+def test_docs_routes_are_independent_of_debug() -> None:
+    import os
+
+    from app.config.settings import get_settings
+    from app.main import create_app
+
+    os.environ["DEBUG"] = "false"
+    get_settings.cache_clear()
+    try:
+        new_app = create_app()
+        new_routes = route_inventory(new_app)
+        assert ("GET", "/docs") in new_routes
+        assert ("GET", "/redoc") in new_routes
+        assert ("GET", "/openapi.json") in new_routes
+    finally:
+        get_settings.cache_clear()
+        os.environ.pop("DEBUG", None)
+
+
 def test_create_app_returns_independent_app() -> None:
     from app.main import create_app
 
