@@ -113,6 +113,8 @@ class RestaurantController(BaseController):  # type: ignore[misc]
         current_user: CurrentUser,
     ) -> RestaurantResponse:
         """Update a restaurant (owner only)."""
+        from app.domain.value_objects import PhoneNumber
+
         repo = RestaurantRepository(session)
         restaurant = await repo.get(restaurant_id)
         if not restaurant:
@@ -123,7 +125,11 @@ class RestaurantController(BaseController):  # type: ignore[misc]
         update_data = request.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             if hasattr(restaurant, field):
-                setattr(restaurant, field, value)
+                if field == "phone" and value is not None:
+                    # Convert phone string to PhoneNumber value object
+                    setattr(restaurant, field, PhoneNumber(number=PhoneNumber.normalize(value)))
+                else:
+                    setattr(restaurant, field, value)
         restaurant.touch()
         saved = await repo.update(restaurant)
         return map_restaurant(saved)

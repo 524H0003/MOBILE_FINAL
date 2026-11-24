@@ -120,6 +120,34 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         model.items = [self._item_to_model(item) for item in entity.items]
         return model
 
+    async def add(self, entity: DomainOrder) -> DomainOrder:
+        """Add an order and return it with eagerly loaded items."""
+        model = self._to_model(entity)
+        self._session.add(model)
+        await self._session.flush()
+        await self._session.refresh(model)
+        saved = await self.get(entity.id)
+        if saved is None:
+            raise ValueError(f"Entity {entity.id} not found after add")
+        return saved
+
+    async def update(self, entity: DomainOrder) -> DomainOrder:
+        """Update an order and return it with eagerly loaded items."""
+        stmt = select(OrderModel).where(OrderModel.id == entity.id)
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        if model is None:
+            raise ValueError(f"Entity {entity.id} not found")
+        updated = self._to_model(entity)
+        for column in model.__table__.columns:
+            setattr(model, column.name, getattr(updated, column.name))
+        await self._session.flush()
+        await self._session.refresh(model)
+        saved = await self.get(entity.id)
+        if saved is None:
+            raise ValueError(f"Entity {entity.id} not found after update")
+        return saved
+
     async def get(self, entity_id: uuid.UUID) -> DomainOrder | None:
         stmt = select(OrderModel).options(selectinload(OrderModel.items)).where(OrderModel.id == entity_id)
         result = await self._session.execute(stmt)

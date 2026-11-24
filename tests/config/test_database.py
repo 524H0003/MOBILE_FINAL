@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 import pytest
@@ -71,13 +72,25 @@ class FakeEngine:
         self.disposed = True
 
 
+@asynccontextmanager
+async def use_db_dependency():
+    """Drive get_db() as an async context manager for lifecycle tests."""
+    generator = database_module.get_db()
+    try:
+        yield await generator.__anext__()
+    except BaseException as exc:
+        await generator.athrow(type(exc), exc, exc.__traceback__)
+    else:
+        with suppress(StopAsyncIteration):
+            await generator.__anext__()
+
 async def test_get_db_commits_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Successful dependency use commits and closes the session."""
     session = FakeSession()
     monkeypatch.setattr(database_module, "async_session_maker", lambda: session)
 
-    async with database_module.get_db() as yielded:
-        assert yielded is session  # type: ignore[comparison-overlap]
+    async with use_db_dependency() as yielded:
+        assert yielded is session
 
     assert session.committed is True
     assert session.rolled_back is False
@@ -90,7 +103,7 @@ async def test_get_db_rolls_back_on_error(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(database_module, "async_session_maker", lambda: session)
 
     with pytest.raises(RuntimeError, match="boom"):
-        async with database_module.get_db():
+        async with use_db_dependency():
             raise RuntimeError("boom")
 
     assert session.committed is False
