@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.orm.models as _orm_models  # noqa: F401  (register models on metadata)
 from app.api.deps.auth import get_current_user
-from app.config.database import get_db
+from app.config.database import get_session
 from app.domain.entities import User
 from app.domain.enums import UserRole
 from app.main import app
@@ -60,10 +60,10 @@ def client_factory(session: AsyncSession) -> Iterator[ClientFactory]:
     """Build an HTTP client with optional authenticated user override."""
 
     def factory(user: User | None = None) -> AsyncClient:
-        async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
             yield session
 
-        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_session] = override_get_session
         if user is None:
             app.dependency_overrides.pop(get_current_user, None)
         else:

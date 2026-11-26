@@ -60,6 +60,18 @@ class RestaurantController(BaseController):  # type: ignore[misc]
             page=pagination.page,
             size=pagination.limit,
         )
+        
+    @typed_get("/owner/mine")
+    async def list_my_restaurants(self, session: DbSession, current_user: CurrentUser) -> list[RestaurantResponse]:
+        """List restaurants owned by the current user."""
+        if current_user.role not in (UserRole.OWNER, UserRole.STAFF):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only owners can view their restaurants",
+            )
+        repo = RestaurantRepository(session)
+        restaurants = await repo.get_by_owner(current_user.id)
+        return [map_restaurant(r) for r in restaurants]
 
     @typed_get("/{restaurant_id}")
     async def get_restaurant(self, restaurant_id: UUID, session: DbSession) -> RestaurantResponse:
@@ -113,8 +125,6 @@ class RestaurantController(BaseController):  # type: ignore[misc]
         current_user: CurrentUser,
     ) -> RestaurantResponse:
         """Update a restaurant (owner only)."""
-        from app.domain.value_objects import PhoneNumber
-
         repo = RestaurantRepository(session)
         restaurant = await repo.get(restaurant_id)
         if not restaurant:
@@ -122,14 +132,15 @@ class RestaurantController(BaseController):  # type: ignore[misc]
         if restaurant.owner_id != current_user.id and current_user.role != UserRole.STAFF:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
+
         update_data = request.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            if hasattr(restaurant, field):
-                if field == "phone" and value is not None:
-                    # Convert phone string to PhoneNumber value object
-                    setattr(restaurant, field, PhoneNumber(number=PhoneNumber.normalize(value)))
-                else:
-                    setattr(restaurant, field, value)
+
+        for field_name, value in update_data.items():
+            if hasattr(restaurant, field_name):
+                if value is not None:
+                    if field_name in ("opening_time", "closing_time"):value = value.strftime("%H:%M")
+                    elif field_name in ("delivery_fee", "min_order_amount"):value = Money(amount=value)
+                setattr(restaurant, field_name, value)
         restaurant.touch()
         saved = await repo.update(restaurant)
         return map_restaurant(saved)

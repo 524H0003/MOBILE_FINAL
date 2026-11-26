@@ -102,7 +102,12 @@ class OrderController(BaseController):  # type: ignore[misc]
         if not order:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
         if order.customer_id != current_user.id and current_user.role != UserRole.STAFF:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+            restaurant = await RestaurantRepository(session).get(order.restaurant_id)
+            owns_restaurant = (
+                current_user.role == UserRole.OWNER and restaurant is not None and restaurant.owner_id == current_user.id
+            )
+            if not owns_restaurant:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
         restaurant_name, payment_status = await _order_response_context(session, order)
         return map_order(order, restaurant_name=restaurant_name, payment_status=payment_status)
 
@@ -114,6 +119,14 @@ class OrderController(BaseController):  # type: ignore[misc]
         service = OrderService(session)
         if current_user.role == UserRole.STAFF:
             orders = await service.list_all_orders(limit=pagination.limit, offset=pagination.offset)
+        elif current_user.role == UserRole.OWNER:
+            shops = await RestaurantRepository(session).get_by_owner(current_user.id)
+            orders = []
+            for shop in shops:
+                orders.extend(
+                    await service.get_restaurant_orders(shop.id, limit=pagination.limit, offset=pagination.offset)
+                )
+            orders.sort(key=lambda o: o.created_at, reverse=True)
         else:
             orders = await service.get_customer_orders(
                 current_user.id, limit=pagination.limit, offset=pagination.offset

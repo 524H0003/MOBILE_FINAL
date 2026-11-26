@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.database import get_db
+from app.config.database import get_session
 from app.core.security import ACCESS_TOKEN_TYPE, TokenError, decode_token, token_subject
 from app.domain.entities import User
 from app.domain.enums import UserRole
@@ -17,7 +17,7 @@ from app.repositories.user import UserRepository
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
-DbSession = Annotated[AsyncSession, Depends(get_db)]
+DbSession = Annotated[AsyncSession, Depends(get_session)]
 
 
 async def _resolve_user(

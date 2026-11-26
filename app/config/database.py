@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -25,8 +26,9 @@ async_session_maker = async_sessionmaker(
 )
 
 
+@asynccontextmanager
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Get database session as FastAPI dependency."""
+    """Get database session context manager."""
     async with async_session_maker() as session:
         try:
             yield session
@@ -37,6 +39,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         finally:
             await session.close()
 
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency: yield a session, commit/rollback via get_db."""
+    async with get_db() as session:
+        yield session
 
 async def init_db() -> None:
     """Initialize database tables."""

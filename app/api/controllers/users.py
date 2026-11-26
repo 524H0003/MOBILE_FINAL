@@ -92,7 +92,6 @@ class UserController(BaseController):  # type: ignore[misc]
         current_user: Any = require_roles(UserRole.STAFF),
     ) -> UserResponse:
         """Update user (staff only)."""
-        from app.domain.value_objects import PhoneNumber
         from app.repositories.user import UserRepository
 
         repo = UserRepository(session)
@@ -101,11 +100,7 @@ class UserController(BaseController):  # type: ignore[misc]
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         for field, value in request.model_dump(exclude_unset=True).items():
             if hasattr(user, field):
-                if field == "phone" and value is not None:
-                    # Convert phone string to PhoneNumber value object
-                    setattr(user, field, PhoneNumber(number=PhoneNumber.normalize(value)))
-                else:
-                    setattr(user, field, value)
+                setattr(user, field, value)
         user.touch()
         saved = await repo.update(user)
         return map_user(saved)

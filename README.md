@@ -122,26 +122,7 @@ pytest
 
 Mặc định local dùng `sqlite+aiosqlite:///./app.db`, tức file `app.db` ở thư mục hiện tại. Có thể ghi đè bằng biến môi trường `DATABASE_URL` hoặc file `.env`.
 
-## 4. Chạy demo tương tác API
-
-Khi server đang chạy (`http://localhost:8000`), chạy script demo để tự động kiểm tra nhiều luồng endpoint:
-
-```bash
-python test_api_demo.py
-```
-
-Script sẽ tạo dữ liệu và đi qua các nhóm kịch bản:
-
-- Health check, ping, Swagger/OpenAPI.
-- Đăng ký/đăng nhập/refresh theo các role `OWNER`, `CUSTOMER`, `STAFF`.
-- CRUD nhà hàng, category, menu item, promotion.
-- Tạo đơn hàng, thanh toán, xác nhận/hoàn tiền.
-- Chuyển trạng thái đơn hàng, dispatch giao hàng, cập nhật tracking.
-- Đặt lại đơn đã giao, tạo đánh giá, quản lý user và dọn dữ liệu.
-
-Kết quả từng bước được in ra terminal; không có dòng `✗` nghĩa là tất cả kịch bản đã thành công. Script dùng database đang chạy nên sẽ tạo thêm dữ liệu test.
-
-## 5. Cấu trúc file Docker
+## 4. Cấu trúc file Docker
 
 - `Dockerfile`: base `python:3.13-slim`, chạy ứng dụng với user không phải root, tự migration rồi `exec uvicorn`.
 - `.dockerignore`: loại `.env`, database, cache, test và các file không cần thiết khỏi build context.
