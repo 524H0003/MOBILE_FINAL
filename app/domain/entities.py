@@ -20,6 +20,7 @@ from app.domain.enums import (
     UserRole,
 )
 from app.domain.value_objects import Address, Coordinates, Money, PhoneNumber
+from app.domain.modifiers import ModifierGroup
 
 
 class User(DomainEntity):
@@ -54,6 +55,7 @@ class Restaurant(DomainEntity):
     delivery_radius_km: Decimal = Field(default=Decimal("5.0"), ge=0, le=50)
     rating: Decimal = Field(default=Decimal("0.0"), ge=0, le=5, decimal_places=1)
     total_reviews: int = Field(default=0, ge=0)
+    busy_until: datetime | None = None
 
 
 class Category(DomainEntity):
@@ -84,6 +86,7 @@ class MenuItem(DomainEntity):
     preparation_time_minutes: int = Field(default=15, ge=1, le=120)
     calories: int | None = Field(default=None, ge=0)
     allergens: list[str] = Field(default_factory=list)
+    modifier_groups: list[ModifierGroup] = Field(default_factory=list)
     display_order: int = Field(default=0, ge=0)
 
 

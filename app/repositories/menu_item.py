@@ -7,9 +7,12 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy.orm import selectinload
+
 from app.domain.entities import MenuItem as DomainMenuItem
 from app.domain.enums import MenuItemStatus
-from app.orm.models import MenuItem as MenuItemModel
+from app.domain.modifiers import Modifier as DomainModifier, ModifierGroup as DomainModifierGroup
+from app.orm.models import MenuItem as MenuItemModel, ModifierGroup as ModifierGroupModel, Modifier as ModifierModel
 from app.repositories.base import BaseRepository
 from app.repositories.mappers import join_csv, money, money_required, split_csv
 
@@ -20,7 +23,47 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, MenuItemModel)
 
+    async def get(self, entity_id: uuid.UUID) -> DomainMenuItem | None:
+        stmt = (
+            select(MenuItemModel)
+            .options(selectinload(MenuItemModel.modifier_groups).selectinload(ModifierGroupModel.modifiers))
+            .where(MenuItemModel.id == entity_id)
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return self._to_domain(model) if model else None
+
     def _to_domain(self, model: MenuItemModel) -> DomainMenuItem:
+        modifier_groups = []
+        if hasattr(model, "modifier_groups") and model.modifier_groups:
+            for group_model in model.modifier_groups:
+                modifiers = []
+                if hasattr(group_model, "modifiers") and group_model.modifiers:
+                    for mod_model in group_model.modifiers:
+                        modifiers.append(
+                            DomainModifier(
+                                id=mod_model.id,
+                                created_at=mod_model.created_at,
+                                updated_at=mod_model.updated_at,
+                                group_id=mod_model.group_id,
+                                name=mod_model.name,
+                                price=money_required(mod_model.price),
+                            )
+                        )
+                modifier_groups.append(
+                    DomainModifierGroup(
+                        id=group_model.id,
+                        created_at=group_model.created_at,
+                        updated_at=group_model.updated_at,
+                        menu_item_id=group_model.menu_item_id,
+                        name=group_model.name,
+                        min_selection=group_model.min_selection,
+                        max_selection=group_model.max_selection,
+                        display_order=group_model.display_order,
+                        modifiers=modifiers,
+                    )
+                )
+
         return DomainMenuItem(
             id=model.id,
             created_at=model.created_at,
@@ -40,7 +83,9 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
             calories=model.calories,
             allergens=split_csv(model.allergens),
             display_order=model.display_order,
+            modifier_groups=modifier_groups,
         )
+
 
     def _to_model(self, entity: DomainMenuItem) -> MenuItemModel:
         return MenuItemModel(
@@ -69,6 +114,7 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
     ) -> list[DomainMenuItem]:
         stmt = (
             select(MenuItemModel)
+            .options(selectinload(MenuItemModel.modifier_groups).selectinload(ModifierGroupModel.modifiers))
             .where(MenuItemModel.restaurant_id == restaurant_id)
             .order_by(MenuItemModel.display_order)
             .limit(limit)
@@ -82,6 +128,7 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
     ) -> list[DomainMenuItem]:
         stmt = (
             select(MenuItemModel)
+            .options(selectinload(MenuItemModel.modifier_groups).selectinload(ModifierGroupModel.modifiers))
             .where(MenuItemModel.category_id == category_id)
             .order_by(MenuItemModel.display_order)
             .limit(limit)
@@ -95,6 +142,7 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
     ) -> list[DomainMenuItem]:
         stmt = (
             select(MenuItemModel)
+            .options(selectinload(MenuItemModel.modifier_groups).selectinload(ModifierGroupModel.modifiers))
             .where(
                 MenuItemModel.restaurant_id == restaurant_id,
                 MenuItemModel.status == MenuItemStatus.AVAILABLE,
@@ -105,3 +153,4 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().all()]
+

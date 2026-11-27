@@ -83,6 +83,7 @@ class Restaurant(Base, TimestampMixin):
     delivery_radius_km: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=5.0)
     rating: Mapped[Decimal] = mapped_column(Numeric(2, 1), nullable=False, default=0.0)
     total_reviews: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    busy_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     owner: Mapped[User] = relationship("User", back_populates="restaurants")
     categories: Mapped[list[Category]] = relationship(
@@ -145,6 +146,9 @@ class MenuItem(Base, TimestampMixin):
     category: Mapped[Category] = relationship("Category", back_populates="menu_items")
     order_items: Mapped[list[OrderItem]] = relationship(
         "OrderItem", back_populates="menu_item", cascade="all, delete-orphan"
+    )
+    modifier_groups: Mapped[list[ModifierGroup]] = relationship(
+        "ModifierGroup", back_populates="menu_item", cascade="all, delete-orphan"
     )
 
 
@@ -314,3 +318,35 @@ class Review(Base, TimestampMixin):
     customer: Mapped[User] = relationship("User", back_populates="reviews")
     restaurant: Mapped[Restaurant] = relationship("Restaurant", back_populates="reviews")
     order: Mapped[Order] = relationship("Order")
+
+
+class ModifierGroup(Base, TimestampMixin):
+    """ModifierGroup ORM model."""
+
+    __tablename__ = "modifier_groups"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    menu_item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("menu_items.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    min_selection: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_selection: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    menu_item: Mapped[MenuItem] = relationship("MenuItem", back_populates="modifier_groups")
+    modifiers: Mapped[list[Modifier]] = relationship(
+        "Modifier", back_populates="group", cascade="all, delete-orphan"
+    )
+
+
+class Modifier(Base, TimestampMixin):
+    """Modifier ORM model."""
+
+    __tablename__ = "modifiers"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("modifier_groups.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+
+    group: Mapped[ModifierGroup] = relationship("ModifierGroup", back_populates="modifiers")
+

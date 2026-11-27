@@ -10,6 +10,7 @@ from app.api.schemas.categories import CategoryResponse
 from app.api.schemas.common import Page
 from app.api.schemas.deliveries import DeliveryAddress, DeliveryResponse
 from app.api.schemas.menu_items import MenuItemResponse
+from app.api.schemas.modifiers import ModifierGroupResponse, ModifierResponse
 from app.api.schemas.orders import (
     OrderAddress,
     OrderItemResponse,
@@ -195,6 +196,20 @@ def map_menu_item(item: MenuItem) -> MenuItemResponse:
         is_featured=False,
         preparation_time_minutes=item.preparation_time_minutes,
         allergens=item.allergens,
+        modifier_groups=[
+            ModifierGroupResponse(
+                id=group.id,
+                name=group.name,
+                min_selection=group.min_selection,
+                max_selection=group.max_selection,
+                display_order=group.display_order,
+                modifiers=[
+                    ModifierResponse(id=mod.id, name=mod.name, price=mod.price)
+                    for mod in group.modifiers
+                ],
+            )
+            for group in item.modifier_groups
+        ],
         created_at=item.created_at,
         updated_at=item.updated_at,
     )

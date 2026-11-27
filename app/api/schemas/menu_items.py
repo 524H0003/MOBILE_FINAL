@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.schemas.modifiers import ModifierGroupResponse
 from app.domain.enums import MenuItemStatus
 
 
@@ -60,6 +61,7 @@ class MenuItemResponse(MenuItemBase):
     id: UUID
     restaurant_id: UUID
     category_id: UUID
+    modifier_groups: list[ModifierGroupResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
