@@ -13,6 +13,7 @@ from app.api.controllers import (  # noqa: F401
     auth,
     deliveries,
     menu,
+    notifications,
     orders,
     payments,
     ping,

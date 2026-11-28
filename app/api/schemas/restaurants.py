@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, time
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,6 +34,9 @@ class RestaurantBase(BaseModel):
     minimum_order_amount: Decimal = Field(..., ge=Decimal("0"))
     delivery_fee: Decimal = Field(..., ge=Decimal("0"))
     status: RestaurantStatus = RestaurantStatus.PENDING
+    busy_until: datetime | None = None
+    weekly_schedule: dict[str, dict[str, object]] = Field(default_factory=dict)
+    custom_schedules: list[dict[str, object]] = Field(default_factory=list)
     avatar_url: str | None = None
     cover_url: str | None = None
 
@@ -65,8 +69,19 @@ class RestaurantUpdate(BaseModel):
     minimum_order_amount: Decimal | None = Field(default=None, ge=Decimal("0"))
     delivery_fee: Decimal | None = Field(default=None, ge=Decimal("0"))
     status: RestaurantStatus | None = None
+    busy_until: datetime | None = None
+    weekly_schedule: dict[str, dict[str, object]] | None = None
+    custom_schedules: list[dict[str, object]] | None = None
     avatar_url: str | None = None
     cover_url: str | None = None
+
+
+class RestaurantBusyUpdate(BaseModel):
+    """Set a temporary busy window for a restaurant."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    duration_minutes: Literal[15, 30, 60, 1440] | None = None
 
 
 class RestaurantResponse(RestaurantBase):

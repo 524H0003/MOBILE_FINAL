@@ -4,20 +4,25 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TypedDict
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities import Order as DomainOrder
 from app.domain.entities import OrderItem as DomainOrderItem
-from app.domain.enums import OrderStatus, PromotionType
-from app.domain.value_objects import Address, Money
+from app.domain.modifiers import Modifier as DomainModifier
+from app.domain.enums import DeliveryProvider, OrderStatus, PaymentStatus, PromotionType
+from app.domain.value_objects import Address, Coordinates, Money
+from app.orm.models import Modifier as ModifierModel
 from app.repositories.menu_item import MenuItemRepository
 from app.repositories.order import OrderRepository
 from app.repositories.promotion import PromotionRepository
 from app.repositories.restaurant import RestaurantRepository
 from app.services.delivery import DeliveryService
+from app.services.notifications import NotificationService
+from app.services.payment import PaymentService
 
 
 class OrderItemInput(TypedDict):
@@ -26,6 +31,7 @@ class OrderItemInput(TypedDict):
     menu_item_id: uuid.UUID
     quantity: int
     special_instructions: str | None
+    modifier_ids: list[uuid.UUID]
 
 
 class AddressInput(TypedDict):
@@ -58,16 +64,19 @@ class OrderService:
         items: list[OrderItemInput],
         delivery_address: AddressInput,
         promotion_code: str | None = None,
+        delivery_provider: DeliveryProvider = DeliveryProvider.AHAMOVE,
         notes: str | None = None,
         scheduled_for: datetime | None = None,
     ) -> DomainOrder:
         """Create a new order with items and calculate totals."""
-        # Verify restaurant exists and is active
+        # Verify restaurant exists and is open for ordering
         restaurant = await self._restaurant_repo.get(restaurant_id)
         if not restaurant:
             raise ValueError("Restaurant not found")
         if not restaurant.is_active:
             raise ValueError("Restaurant is not active")
+        if not restaurant.is_open_at():
+            raise ValueError("Restaurant is closed or busy")
 
         # Verify menu items exist and are available
         order_items: list[DomainOrderItem] = []
@@ -82,6 +91,51 @@ class OrderService:
 
             quantity = item_data["quantity"]
             special_instructions = item_data.get("special_instructions")
+            modifier_ids = item_data.get("modifier_ids", [])
+
+            # Validate and load modifiers if any
+            modifiers: list[DomainModifier] = []
+            if modifier_ids:
+                # Get all modifiers for this menu item's modifier groups
+                all_modifier_ids = set()
+                for group in menu_item.modifier_groups:
+                    for mod in group.modifiers:
+                        all_modifier_ids.add(mod.id)
+
+                # Check that all selected modifiers belong to this menu item
+                invalid_modifiers = [mid for mid in modifier_ids if mid not in all_modifier_ids]
+                if invalid_modifiers:
+                    raise ValueError(f"Invalid modifier IDs for menu item {menu_item.name}: {invalid_modifiers}")
+
+                # Validate selection constraints per modifier group
+                for group in menu_item.modifier_groups:
+                    group_modifier_ids = [mid for mid in modifier_ids if any(m.id == mid for m in group.modifiers)]
+                    selected_count = len(group_modifier_ids)
+                    if selected_count < group.min_selection:
+                        raise ValueError(
+                            f"Modifier group '{group.name}' requires at least {group.min_selection} selection(s)"
+                        )
+                    if selected_count > group.max_selection:
+                        raise ValueError(
+                            f"Modifier group '{group.name}' allows at most {group.max_selection} selection(s)"
+                        )
+
+                # Load the modifier domain entities
+                for mod_id in modifier_ids:
+                    stmt = select(ModifierModel).where(ModifierModel.id == mod_id)
+                    result = await self._session.execute(stmt)
+                    mod_model = result.scalar_one_or_none()
+                    if mod_model:
+                        modifiers.append(
+                            DomainModifier(
+                                id=mod_model.id,
+                                created_at=mod_model.created_at,
+                                updated_at=mod_model.updated_at,
+                                group_id=mod_model.group_id,
+                                name=mod_model.name,
+                                price=Money(amount=mod_model.price),
+                            )
+                        )
 
             order_item = DomainOrderItem.create(
                 order_id=uuid.uuid4(),  # temporary, will be set after order creation
@@ -90,34 +144,63 @@ class OrderService:
                 menu_item_price=menu_item.price,
                 quantity=quantity,
                 note=special_instructions,
+                modifiers=modifiers,
+                allergens=menu_item.allergens,
             )
             order_items.append(order_item)
             subtotal += order_item.subtotal.amount
 
-        # Calculate delivery fee
-        delivery_fee = restaurant.delivery_fee.amount
+        if subtotal < restaurant.min_order_amount.amount:
+            raise ValueError(f"Minimum order amount is {restaurant.min_order_amount}")
 
-        # Apply promotion if provided
+        # Automatic distance-based shipping quote shown before payment.
+        pickup_coordinates = (
+            Coordinates(
+                latitude=restaurant.address.latitude,
+                longitude=restaurant.address.longitude,
+            )
+            if restaurant.address.latitude is not None and restaurant.address.longitude is not None
+            else None
+        )
+        dropoff_coordinates = (
+            Coordinates(latitude=delivery_address["latitude"], longitude=delivery_address["longitude"])
+            if delivery_address.get("latitude") is not None and delivery_address.get("longitude") is not None
+            else None
+        )
+        quote = await self._delivery_service.get_quote(
+            pickup=restaurant.address,
+            dropoff=Address(**delivery_address),
+            provider=delivery_provider,
+            pickup_coordinates=pickup_coordinates,
+            dropoff_coordinates=dropoff_coordinates,
+        )
+        quote_fee = Decimal(str(quote["fee"]))
+        delivery_fee = max(restaurant.delivery_fee.amount, quote_fee)
+
+        # Apply promotion if provided. Vouchers never reduce shipping.
         discount_amount = Decimal("0")
         promotion_id = None
+        promo = None
         if promotion_code:
             promotions = await self._promotion_repo.get_active_by_restaurant(restaurant_id)
             promo = next((p for p in promotions if p.name == promotion_code), None)
             if promo and promo.is_valid():
                 if promo.min_order_amount and subtotal < promo.min_order_amount.amount:
                     raise ValueError(f"Minimum order amount for this promotion is {promo.min_order_amount}")
+                used = await self._order_repo.count_by_customer_and_promotion(customer_id, promo.id)
+                if used >= promo.user_usage_limit:
+                    raise ValueError("Promotion usage limit reached for this customer")
                 if promo.type == PromotionType.PERCENTAGE:
                     discount_amount = subtotal * (promo.value / Decimal("100"))
                     if promo.max_discount_amount:
                         discount_amount = min(discount_amount, promo.max_discount_amount.amount)
                 elif promo.type == PromotionType.FIXED_AMOUNT:
                     discount_amount = min(promo.value, subtotal)
-                elif promo.type == PromotionType.FREE_DELIVERY:
-                    discount_amount = delivery_fee
+                # FREE_DELIVERY is intentionally not applied to shipping.
                 promotion_id = promo.id
 
-        # Ensure discount doesn't exceed subtotal
-        discount_amount = min(discount_amount, subtotal)
+        # Ensure discount doesn't exceed subtotal and money has at most 2 decimals.
+        discount_amount = min(discount_amount, subtotal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         total_amount = subtotal + delivery_fee - discount_amount
 
@@ -132,7 +215,9 @@ class OrderService:
             total_amount=Money(amount=total_amount),
             promotion_id=promotion_id,
             promotion_code=promotion_code,
+            delivery_provider=delivery_provider,
             delivery_address=Address(**delivery_address),
+            delivery_coordinates=dropoff_coordinates,
             customer_note=notes,
         )
 
@@ -150,6 +235,7 @@ class OrderService:
                 promo.usage_count += 1
                 await self._promotion_repo.update(promo)
 
+        await NotificationService(self._session).notify_order_created(saved_order)
         return saved_order
 
     async def get_order(self, order_id: uuid.UUID) -> DomainOrder | None:
@@ -195,6 +281,14 @@ class OrderService:
 
         updated_order = await self._order_repo.update(order)
 
+        # Refund prepaid orders when the restaurant rejects/cancels.
+        if new_status == OrderStatus.CANCELLED:
+            payment = await PaymentService(self._session).get_payment_by_order(order_id)
+            if payment is not None and PaymentStatus(payment.status) == PaymentStatus.COMPLETED:
+                await PaymentService(self._session).refund_payment(payment.id)
+
+        await NotificationService(self._session).notify_order_status(updated_order, new_status)
+
         # If order is ready for pickup, auto-dispatch delivery
         if new_status == OrderStatus.READY_FOR_PICKUP:
             await self._delivery_service.auto_dispatch(order_id)
@@ -220,6 +314,7 @@ class OrderService:
                 "menu_item_id": item.menu_item_id,
                 "quantity": item.quantity,
                 "special_instructions": item.note,
+                "modifier_ids": [mod.id for mod in item.modifiers],
             }
             for item in original_order.items
         ]

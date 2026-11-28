@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.entities import Order as DomainOrder
 from app.domain.entities import OrderItem as DomainOrderItem
+from app.domain.modifiers import Modifier as DomainModifier
 from app.domain.enums import OrderStatus
+from app.orm.models import Modifier as ModifierModel
 from app.orm.models import Order as OrderModel
 from app.orm.models import OrderItem as OrderItemModel
+from app.orm.models import OrderItemModifier
 from app.repositories.base import BaseRepository
-from app.repositories.mappers import address, coordinates, money_required
+from app.repositories.mappers import address, coordinates, join_csv, money_required, split_csv
+from app.domain.value_objects import Money
 
 
 class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
@@ -24,6 +28,17 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         super().__init__(session, OrderModel)
 
     def _item_to_domain(self, model: OrderItemModel) -> DomainOrderItem:
+        modifiers = [
+            DomainModifier(
+                id=mod.id,
+                created_at=mod.created_at,
+                updated_at=mod.updated_at,
+                group_id=mod.group_id,
+                name=mod.name,
+                price=Money(amount=mod.price),
+            )
+            for mod in getattr(model, "modifiers", []) or []
+        ]
         return DomainOrderItem(
             id=model.id,
             created_at=model.created_at,
@@ -35,6 +50,8 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
             quantity=model.quantity,
             note=model.note,
             subtotal=money_required(model.subtotal),
+            modifiers=modifiers,
+            allergens=split_csv(model.allergens),
         )
 
     def _item_to_model(self, entity: DomainOrderItem) -> OrderItemModel:
@@ -48,7 +65,9 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
             menu_item_price=entity.menu_item_price.amount,
             quantity=entity.quantity,
             note=entity.note,
+            allergens=join_csv(entity.allergens),
             subtotal=entity.subtotal.amount,
+            modifiers=[],  # Will be set by SQLAlchemy relationship
         )
 
     def _to_domain(self, model: OrderModel) -> DomainOrder:
@@ -67,6 +86,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
             total_amount=money_required(model.total_amount),
             promotion_id=model.promotion_id,
             promotion_code=model.promotion_code,
+            delivery_provider=model.delivery_provider,
             delivery_address=address(
                 street=model.street,
                 ward=model.ward,
@@ -101,6 +121,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
             total_amount=entity.total_amount.amount,
             promotion_id=entity.promotion_id,
             promotion_code=entity.promotion_code,
+            delivery_provider=entity.delivery_provider,
             street=entity.delivery_address.street,
             ward=entity.delivery_address.ward,
             district=entity.delivery_address.district,
@@ -121,14 +142,25 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         return model
     
     async def add(self, entity: DomainOrder) -> DomainOrder:
-        """Add order and eagerly load its items."""
+        """Add order and eagerly load its items with modifiers."""
         model = self._to_model(entity)
         self._session.add(model)
         await self._session.flush()
 
+        # Persist order item modifiers to junction table
+        for item in entity.items:
+            for modifier in item.modifiers:
+                oim = OrderItemModifier(
+                    order_item_id=item.id,
+                    modifier_id=modifier.id,
+                )
+                self._session.add(oim)
+
+        await self._session.flush()
+
         stmt = (
             select(OrderModel)
-            .options(selectinload(OrderModel.items))
+            .options(selectinload(OrderModel.items).selectinload(OrderItemModel.modifiers))
             .where(OrderModel.id == model.id)
         )
         result = await self._session.execute(stmt)
@@ -136,10 +168,10 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         return self._to_domain(saved_model)
     
     async def update(self, entity: DomainOrder) -> DomainOrder:
-        """Update order and eagerly load its items."""
+        """Update order and eagerly load its items with modifiers."""
         stmt = (
             select(OrderModel)
-            .options(selectinload(OrderModel.items))
+            .options(selectinload(OrderModel.items).selectinload(OrderItemModel.modifiers))
             .where(OrderModel.id == entity.id)
         )
         result = await self._session.execute(stmt)
@@ -152,7 +184,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         await self._session.flush()
         stmt = (
             select(OrderModel)
-            .options(selectinload(OrderModel.items))
+            .options(selectinload(OrderModel.items).selectinload(OrderItemModel.modifiers))
             .where(OrderModel.id == entity.id)
             .execution_options(populate_existing=True)
         )
@@ -161,20 +193,29 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         return self._to_domain(saved_model)
     
     async def get(self, entity_id: uuid.UUID) -> DomainOrder | None:
-        stmt = select(OrderModel).options(selectinload(OrderModel.items)).where(OrderModel.id == entity_id)
+        stmt = (
+            select(OrderModel)
+            .options(selectinload(OrderModel.items).selectinload(OrderItemModel.modifiers))
+            .where(OrderModel.id == entity_id)
+        )
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return self._to_domain(model) if model else None
 
     async def list_all(self, *, limit: int = 100, offset: int = 0) -> list[DomainOrder]:
-        stmt = select(OrderModel).options(selectinload(OrderModel.items)).limit(limit).offset(offset)
+        stmt = (
+            select(OrderModel)
+            .options(selectinload(OrderModel.items).selectinload(OrderItemModel.modifiers))
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().unique().all()]
 
     async def get_by_customer(self, customer_id: uuid.UUID, *, limit: int = 100, offset: int = 0) -> list[DomainOrder]:
         stmt = (
             select(OrderModel)
-            .options(selectinload(OrderModel.items))
+            .options(selectinload(OrderModel.items).selectinload(OrderItemModel.modifiers))
             .where(OrderModel.customer_id == customer_id)
             .order_by(OrderModel.created_at.desc())
             .limit(limit)
@@ -188,7 +229,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
     ) -> list[DomainOrder]:
         stmt = (
             select(OrderModel)
-            .options(selectinload(OrderModel.items))
+            .options(selectinload(OrderModel.items).selectinload(OrderItemModel.modifiers))
             .where(OrderModel.restaurant_id == restaurant_id)
             .order_by(OrderModel.created_at.desc())
             .limit(limit)
@@ -200,7 +241,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
     async def get_by_status(self, status: OrderStatus, *, limit: int = 100, offset: int = 0) -> list[DomainOrder]:
         stmt = (
             select(OrderModel)
-            .options(selectinload(OrderModel.items))
+            .options(selectinload(OrderModel.items).selectinload(OrderItemModel.modifiers))
             .where(OrderModel.status == status)
             .order_by(OrderModel.created_at.desc())
             .limit(limit)
@@ -208,3 +249,16 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().unique().all()]
+
+    async def count_by_customer_and_promotion(self, customer_id: uuid.UUID, promotion_id: uuid.UUID) -> int:
+        """Count orders where a customer already used a promotion."""
+        result = await self._session.scalar(
+            select(func.count())
+            .select_from(OrderModel)
+            .where(
+                OrderModel.customer_id == customer_id,
+                OrderModel.promotion_id == promotion_id,
+                OrderModel.status != OrderStatus.CANCELLED,
+            )
+        )
+        return int(result or 0)

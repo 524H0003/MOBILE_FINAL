@@ -64,6 +64,7 @@ class OrderController(BaseController):  # type: ignore[misc]
                 "menu_item_id": item.menu_item_id,
                 "quantity": item.quantity,
                 "special_instructions": item.special_instructions,
+                "modifier_ids": item.modifier_ids,
             }
             for item in request.items
         ]
@@ -86,6 +87,7 @@ class OrderController(BaseController):  # type: ignore[misc]
                 items=items,
                 delivery_address=address,
                 promotion_code=request.promotion_code,
+                delivery_provider=request.delivery_provider,
                 notes=request.notes,
                 scheduled_for=request.scheduled_for,
             )

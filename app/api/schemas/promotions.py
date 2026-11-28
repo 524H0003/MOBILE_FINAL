@@ -26,6 +26,7 @@ class PromotionBase(BaseModel):
     start_date: date
     end_date: date
     usage_limit: int | None = Field(default=None, ge=1)
+    user_usage_limit: int = Field(default=1, ge=1)
     status: PromotionStatus = PromotionStatus.ACTIVE
     applicable_item_ids: list[UUID] = Field(default_factory=list)
     applicable_category_ids: list[UUID] = Field(default_factory=list)
@@ -52,6 +53,7 @@ class PromotionUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     usage_limit: int | None = Field(default=None, ge=1)
+    user_usage_limit: int | None = Field(default=None, ge=1)
     status: PromotionStatus | None = None
     applicable_item_ids: list[UUID] | None = None
     applicable_category_ids: list[UUID] | None = None

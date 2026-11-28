@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated, Any
 
@@ -17,10 +17,11 @@ from app.domain.enums import (
     OrderStatus,
     PaymentStatus,
     PromotionType,
+    RestaurantStatus,
     UserRole,
 )
 from app.domain.value_objects import Address, Coordinates, Money, PhoneNumber
-from app.domain.modifiers import ModifierGroup
+from app.domain.modifiers import Modifier, ModifierGroup
 
 
 class User(DomainEntity):
@@ -55,7 +56,40 @@ class Restaurant(DomainEntity):
     delivery_radius_km: Decimal = Field(default=Decimal("5.0"), ge=0, le=50)
     rating: Decimal = Field(default=Decimal("0.0"), ge=0, le=5, decimal_places=1)
     total_reviews: int = Field(default=0, ge=0)
+    status: RestaurantStatus = RestaurantStatus.ACTIVE
     busy_until: datetime | None = None
+    weekly_schedule: dict[str, dict[str, object]] = Field(default_factory=dict)
+    custom_schedules: list[dict[str, object]] = Field(default_factory=list)
+
+    def is_open_at(self, at: datetime | None = None) -> bool:
+        """Check opening hours, custom exceptions, and temporary busy status."""
+        now = at or datetime.utcnow()
+        if not self.is_active or self.status != RestaurantStatus.ACTIVE:
+            return False
+        if self.busy_until and self.busy_until > now:
+            return False
+
+        day = now.strftime("%A").lower()
+        current_time = now.time()
+        for schedule in self.custom_schedules:
+            if str(schedule.get("date")) != now.date().isoformat():
+                continue
+            if schedule.get("closed") is True:
+                return False
+            start = time.fromisoformat(str(schedule["open"]))
+            end = time.fromisoformat(str(schedule["close"]))
+            return start <= current_time <= end
+
+        config = self.weekly_schedule.get(day)
+        if config is None:
+            # opening_time/closing_time are displayed to customers; explicit
+            # weekly/custom schedules are what gate ordering.
+            return True
+        if config.get("closed") is True:
+            return False
+        start = time.fromisoformat(str(config["open"]))
+        end = time.fromisoformat(str(config["close"]))
+        return start <= current_time <= end
 
 
 class Category(DomainEntity):
@@ -129,6 +163,8 @@ class OrderItem(DomainEntity):
     quantity: int = Field(..., ge=1)
     note: str | None = None
     subtotal: Money
+    modifiers: list[Modifier] = Field(default_factory=list)
+    allergens: list[str] = Field(default_factory=list)
 
     @classmethod
     def create(
@@ -140,8 +176,12 @@ class OrderItem(DomainEntity):
         menu_item_price: Money,
         quantity: int,
         note: str | None = None,
+        modifiers: list[Modifier] | None = None,
+        allergens: list[str] | None = None,
     ) -> OrderItem:
         """Create order item with calculated subtotal."""
+        modifier_total = sum(mod.price.amount for mod in (modifiers or []))
+        base_price = menu_item_price.amount + modifier_total
         return cls(
             order_id=order_id,
             menu_item_id=menu_item_id,
@@ -149,7 +189,9 @@ class OrderItem(DomainEntity):
             menu_item_price=menu_item_price,
             quantity=quantity,
             note=note,
-            subtotal=Money(amount=menu_item_price.amount * quantity),
+            subtotal=Money(amount=base_price * quantity),
+            modifiers=modifiers or [],
+            allergens=allergens or [],
         )
 
 
@@ -166,6 +208,7 @@ class Order(DomainEntity):
     total_amount: Money = Field(default_factory=lambda: Money(amount=Decimal("0")))
     promotion_id: uuid.UUID | None = None
     promotion_code: str | None = None
+    delivery_provider: DeliveryProvider = DeliveryProvider.AHAMOVE
     delivery_address: Address
     delivery_coordinates: Coordinates | None = None
     customer_note: str | None = None
@@ -306,3 +349,6 @@ class Review(DomainEntity):
     comment: str | None = None
     images: list[str] = Field(default_factory=list)
     is_verified: bool = True
+
+
+OrderItem.model_rebuild()

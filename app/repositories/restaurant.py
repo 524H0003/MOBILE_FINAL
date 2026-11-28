@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.entities import Restaurant as DomainRestaurant
 from app.orm.models import Restaurant as RestaurantModel
 from app.repositories.base import BaseRepository
-from app.repositories.mappers import address, money_required, phone
+from app.repositories.mappers import address, dumps_json, loads_json, money_required, phone
 
 
 class RestaurantRepository(BaseRepository[DomainRestaurant, RestaurantModel]):
@@ -47,6 +47,10 @@ class RestaurantRepository(BaseRepository[DomainRestaurant, RestaurantModel]):
             delivery_radius_km=model.delivery_radius_km,
             rating=model.rating,
             total_reviews=model.total_reviews,
+            status=model.status,
+            busy_until=model.busy_until,
+            weekly_schedule=loads_json(model.weekly_schedule),
+            custom_schedules=list(loads_json(model.custom_schedules).get("items", [])),
         )
 
     def _to_model(self, entity: DomainRestaurant) -> RestaurantModel:
@@ -75,6 +79,10 @@ class RestaurantRepository(BaseRepository[DomainRestaurant, RestaurantModel]):
             delivery_radius_km=entity.delivery_radius_km,
             rating=entity.rating,
             total_reviews=entity.total_reviews,
+            status=entity.status,
+            busy_until=entity.busy_until,
+            weekly_schedule=dumps_json(entity.weekly_schedule),
+            custom_schedules=dumps_json({"items": entity.custom_schedules}),
         )
 
     async def get_by_owner(self, owner_id: uuid.UUID, *, limit: int = 100, offset: int = 0) -> list[DomainRestaurant]:

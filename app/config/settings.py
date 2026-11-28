@@ -45,7 +45,8 @@ class Settings(BaseSettings):
     cors_allow_methods: list[str] = Field(default_factory=lambda: ["*"])
     cors_allow_headers: list[str] = Field(default_factory=lambda: ["*"])
 
-    # Delivery Providers (Mock)
+    # Delivery Providers (Mock by default; set LIVE to use HTTP adapters)
+    delivery_provider_mode: str = "MOCK"
     ahamove_api_key: str = "mock_ahamove_key"
     ahamove_api_secret: str = "mock_ahamove_secret"
     ahamove_base_url: str = "https://api.ahamove.com/v1"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,7 @@ from app.domain.value_objects import Address, Coordinates, PhoneNumber
 from app.repositories.delivery import DeliveryRepository
 from app.repositories.order import OrderRepository
 from app.repositories.restaurant import RestaurantRepository
+from app.services.notifications import NotificationService
 
 
 class DeliveryService:
@@ -35,22 +37,30 @@ class DeliveryService:
         dropoff_coordinates: Coordinates | None = None,
     ) -> dict[str, object]:
         """Get delivery quote from provider."""
-        adapter = get_delivery_adapter(provider)
+        normalized_provider = DeliveryProvider(provider)
+        adapter = get_delivery_adapter(normalized_provider)
         quote = await adapter.get_quote(
             pickup=pickup,
             dropoff=dropoff,
             pickup_coordinates=pickup_coordinates,
             dropoff_coordinates=dropoff_coordinates,
         )
+        if quote is None:
+            return {
+                "provider": normalized_provider.value,
+                "fee": Decimal("0"),
+                "distance_km": Decimal("0"),
+                "estimated_duration_minutes": 10,
+            }
         return {
-            "provider": quote.provider.value,
+            "provider": DeliveryProvider(quote.provider).value,
             "fee": quote.fee,
             "distance_km": quote.distance_km,
             "estimated_duration_minutes": quote.estimated_duration_minutes,
         }
 
     async def auto_dispatch(
-        self, order_id: uuid.UUID, provider: DeliveryProvider = DeliveryProvider.AHAMOVE
+        self, order_id: uuid.UUID, provider: DeliveryProvider | None = None
     ) -> DomainDelivery:
         """Automatically dispatch delivery for an order."""
         # Check if delivery already exists
@@ -67,6 +77,8 @@ class DeliveryService:
         restaurant = await self._restaurant_repo.get(order.restaurant_id)
         if not restaurant:
             raise ValueError("Restaurant not found")
+
+        provider = DeliveryProvider(provider or order.delivery_provider or DeliveryProvider.AHAMOVE)
 
         # Create delivery
         delivery = DomainDelivery(
@@ -88,6 +100,18 @@ class DeliveryService:
 
         saved_delivery = await self._delivery_repo.add(delivery)
 
+        # Store the distance-based quote used for this booking.
+        quote = await self.get_quote(
+            pickup=restaurant.address,
+            dropoff=order.delivery_address,
+            provider=provider,
+            pickup_coordinates=delivery.pickup_coordinates,
+            dropoff_coordinates=order.delivery_coordinates,
+        )
+        if quote:
+            saved_delivery.distance_km = quote["distance_km"]  # type: ignore[assignment]
+            saved_delivery.estimated_duration_minutes = quote["estimated_duration_minutes"]  # type: ignore[assignment]
+
         # Create booking with provider
         adapter = get_delivery_adapter(provider)
         booking = await adapter.create_booking(
@@ -102,7 +126,7 @@ class DeliveryService:
 
         # Update delivery with booking info
         saved_delivery.provider_order_id = booking.provider_order_id
-        saved_delivery.status = booking.status
+        saved_delivery.status = DeliveryStatus(booking.status)
         saved_delivery.driver_name = booking.driver_name
         saved_delivery.driver_phone = (
             PhoneNumber(number=PhoneNumber.normalize(booking.driver_phone)) if booking.driver_phone else None
@@ -112,7 +136,9 @@ class DeliveryService:
         saved_delivery.tracking_url = booking.tracking_url
         saved_delivery.assigned_at = datetime.utcnow()
 
-        return await self._delivery_repo.update(saved_delivery)
+        updated = await self._delivery_repo.update(saved_delivery)
+        await NotificationService(self._session).notify_delivery_status(order, updated, updated.status)
+        return updated
 
     async def get_delivery(self, delivery_id: uuid.UUID) -> DomainDelivery | None:
         """Get delivery by ID."""
@@ -132,7 +158,11 @@ class DeliveryService:
             raise ValueError(f"Cannot transition from {delivery.status} to {new_status}")
 
         delivery.transition_to(new_status)
-        return await self._delivery_repo.update(delivery)
+        updated = await self._delivery_repo.update(delivery)
+        order = await self._order_repo.get(delivery.order_id)
+        if order is not None:
+            await NotificationService(self._session).notify_delivery_status(order, updated, new_status)
+        return updated
 
     async def update_tracking(
         self,
@@ -141,6 +171,8 @@ class DeliveryService:
         status: DeliveryStatus,
         driver_name: str | None = None,
         driver_phone: str | None = None,
+        driver_vehicle: str | None = None,
+        driver_license_plate: str | None = None,
         tracking_url: str | None = None,
     ) -> DomainDelivery:
         """Update delivery tracking information."""
@@ -152,6 +184,10 @@ class DeliveryService:
             delivery.driver_name = driver_name
         if driver_phone:
             delivery.driver_phone = PhoneNumber(number=PhoneNumber.normalize(driver_phone))
+        if driver_vehicle:
+            delivery.driver_vehicle = driver_vehicle
+        if driver_license_plate:
+            delivery.driver_license_plate = driver_license_plate
         if tracking_url:
             delivery.tracking_url = tracking_url
 
@@ -160,4 +196,8 @@ class DeliveryService:
                 raise ValueError(f"Cannot transition from {delivery.status} to {status}")
             delivery.transition_to(status)
 
-        return await self._delivery_repo.update(delivery)
+        updated = await self._delivery_repo.update(delivery)
+        order = await self._order_repo.get(delivery.order_id)
+        if order is not None:
+            await NotificationService(self._session).notify_delivery_status(order, updated, status)
+        return updated

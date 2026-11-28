@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from datetime import datetime, time
 from typing import Any, TypeVar, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from fastapi_controller import controller
@@ -15,6 +15,9 @@ from app.api.mappers import map_category, map_menu_item, map_page, map_promotion
 from app.api.schemas.categories import CategoryCreate, CategoryResponse, CategoryUpdate
 from app.api.schemas.common import Page
 from app.api.schemas.menu_items import MenuItemCreate, MenuItemResponse, MenuItemUpdate
+from app.api.schemas.modifiers import ModifierGroupCreate
+from app.domain.modifiers import Modifier as DomainModifier, ModifierGroup as DomainModifierGroup
+from app.domain.value_objects import Money
 from app.api.schemas.promotions import PromotionCreate, PromotionResponse, PromotionUpdate
 from app.domain.entities import Category as DomainCategory
 from app.domain.entities import MenuItem as DomainMenuItem
@@ -143,6 +146,33 @@ class MenuController(BaseController):  # type: ignore[misc]
         """Create a menu item."""
         await _ensure_restaurant_owner(session, restaurant_id, current_user)
         repo = MenuItemRepository(session)
+        now = datetime.utcnow()
+        modifier_groups = []
+        for group in request.modifier_groups:
+            group_id = uuid4()
+            modifier_groups.append(
+                DomainModifierGroup(
+                    id=group_id,
+                    created_at=now,
+                    updated_at=now,
+                    menu_item_id=None,  # Will be set by repository
+                    name=group.name,
+                    min_selection=group.min_selection,
+                    max_selection=group.max_selection,
+                    display_order=group.display_order,
+                    modifiers=[
+                        DomainModifier(
+                            id=uuid4(),
+                            created_at=now,
+                            updated_at=now,
+                            group_id=group_id,
+                            name=mod.name,
+                            price=Money(amount=mod.price),
+                        )
+                        for mod in group.modifiers
+                    ],
+                )
+            )
         item = DomainMenuItem(
             restaurant_id=restaurant_id,
             category_id=request.category_id,
@@ -157,6 +187,7 @@ class MenuController(BaseController):  # type: ignore[misc]
             is_spicy=False,
             preparation_time_minutes=request.preparation_time_minutes,
             allergens=request.allergens,
+            modifier_groups=modifier_groups,
         )
         saved = await repo.add(item)
         return map_menu_item(saved)
@@ -178,6 +209,37 @@ class MenuController(BaseController):  # type: ignore[misc]
         if "discounted_price" in data:
             item.original_price = Money(amount=data["discounted_price"]) if data["discounted_price"] else None
             del data["discounted_price"]
+        if "modifier_groups" in data:
+            # Handle modifier groups update
+            now = datetime.utcnow()
+            modifier_groups = []
+            for group in data["modifier_groups"]:
+                group_id = uuid4()
+                modifier_groups.append(
+                    DomainModifierGroup(
+                        id=group_id,
+                        created_at=now,
+                        updated_at=now,
+                        menu_item_id=item.id,
+                        name=group["name"],
+                        min_selection=group["min_selection"],
+                        max_selection=group["max_selection"],
+                        display_order=group["display_order"],
+                        modifiers=[
+                            DomainModifier(
+                                id=uuid4(),
+                                created_at=now,
+                                updated_at=now,
+                                group_id=group_id,
+                                name=mod["name"],
+                                price=Money(amount=mod["price"]),
+                            )
+                            for mod in group["modifiers"]
+                        ],
+                    )
+                )
+            item.modifier_groups = modifier_groups
+            del data["modifier_groups"]
         for field, value in data.items():
             if hasattr(item, field):
                 setattr(item, field, value)
@@ -229,6 +291,7 @@ class MenuController(BaseController):  # type: ignore[misc]
                 Money(amount=request.maximum_discount_amount) if request.maximum_discount_amount else None
             ),
             usage_limit=request.usage_limit,
+            user_usage_limit=request.user_usage_limit,
             start_at=datetime.combine(request.start_date, time.min),
             end_at=datetime.combine(request.end_date, time.max),
             is_active=request.status == PromotionStatus.ACTIVE,

@@ -24,6 +24,27 @@ class DeliveryAddress(BaseModel):
     longitude: Decimal | None = None
 
 
+class DeliveryQuoteRequest(BaseModel):
+    """Request a distance-based shipping quote before payment."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pickup: DeliveryAddress
+    dropoff: DeliveryAddress
+    provider: DeliveryProvider = DeliveryProvider.AHAMOVE
+
+
+class DeliveryQuoteResponse(BaseModel):
+    """Shipping quote returned by AhaMove/Lalamove adapter."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: DeliveryProvider
+    fee: Decimal
+    distance_km: Decimal
+    estimated_duration_minutes: int
+
+
 class DeliveryResponse(BaseModel):
     """Delivery response schema."""
 
@@ -36,6 +57,10 @@ class DeliveryResponse(BaseModel):
     provider_order_id: str | None = None
     driver_name: str | None = None
     driver_phone: str | None = None
+    driver_vehicle: str | None = None
+    driver_license_plate: str | None = None
+    distance_km: Decimal | None = None
+    estimated_duration_minutes: int | None = None
     tracking_url: str | None = None
     pickup_address: DeliveryAddress
     dropoff_address: DeliveryAddress
@@ -64,6 +89,8 @@ class DeliveryTrackingUpdate(BaseModel):
     status: DeliveryStatus
     driver_name: str | None = None
     driver_phone: str | None = None
+    driver_vehicle: str | None = None
+    driver_license_plate: str | None = None
     tracking_url: str | None = None
     estimated_pickup_at: datetime | None = None
     estimated_dropoff_at: datetime | None = None

@@ -1,6 +1,7 @@
 """Restaurant controller."""
 
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from typing import Any, TypeVar, cast
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from app.api.deps.pagination import PaginationDep
 from app.api.mappers import map_page, map_restaurant, map_restaurant_summary
 from app.api.schemas.common import Page
 from app.api.schemas.restaurants import (
+    RestaurantBusyUpdate,
     RestaurantCreate,
     RestaurantResponse,
     RestaurantSummaryResponse,
@@ -110,6 +112,10 @@ class RestaurantController(BaseController):  # type: ignore[misc]
             min_order_amount=Money(amount=request.minimum_order_amount),
             delivery_fee=Money(amount=request.delivery_fee),
             delivery_radius_km=request.delivery_radius_km,
+            status=request.status,
+            busy_until=request.busy_until,
+            weekly_schedule=request.weekly_schedule,
+            custom_schedules=request.custom_schedules,
             logo_url=request.avatar_url,
             cover_image_url=request.cover_url,
         )
@@ -134,16 +140,52 @@ class RestaurantController(BaseController):  # type: ignore[misc]
 
 
         update_data = request.model_dump(exclude_unset=True)
+        field_aliases = {
+            "minimum_order_amount": "min_order_amount",
+            "avatar_url": "logo_url",
+            "cover_url": "cover_image_url",
+        }
+        money_fields = {"min_order_amount", "delivery_fee"}
+        time_fields = {"opening_time", "closing_time"}
 
         for field_name, value in update_data.items():
-            if hasattr(restaurant, field_name):
-                if value is not None:
-                    if field_name in ("opening_time", "closing_time"):value = value.strftime("%H:%M")
-                    elif field_name in ("delivery_fee", "min_order_amount"):value = Money(amount=value)
-                setattr(restaurant, field_name, value)
+            target_name = field_aliases.get(field_name, field_name)
+            if not hasattr(restaurant, target_name):
+                continue
+            if value is not None:
+                if target_name in time_fields:
+                    value = value.strftime("%H:%M")
+                elif target_name in money_fields:
+                    value = Money(amount=value)
+                elif target_name == "phone":
+                    value = PhoneNumber(number=PhoneNumber.normalize(value))
+            setattr(restaurant, target_name, value)
         restaurant.touch()
         saved = await repo.update(restaurant)
         return map_restaurant(saved)
+
+    @typed_patch("/{restaurant_id}/busy")
+    async def set_busy(
+        self,
+        restaurant_id: UUID,
+        request: RestaurantBusyUpdate,
+        session: DbSession,
+        current_user: CurrentUser,
+    ) -> RestaurantResponse:
+        """Set or clear the temporary busy window (15m/30m/1h/1day)."""
+        repo = RestaurantRepository(session)
+        restaurant = await repo.get(restaurant_id)
+        if not restaurant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Restaurant not found")
+        if restaurant.owner_id != current_user.id and current_user.role != UserRole.STAFF:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+        restaurant.busy_until = (
+            datetime.utcnow() + timedelta(minutes=request.duration_minutes)
+            if request.duration_minutes is not None
+            else None
+        )
+        restaurant.touch()
+        return map_restaurant(await repo.update(restaurant))
 
     @typed_delete("/{restaurant_id}")
     async def delete_restaurant(

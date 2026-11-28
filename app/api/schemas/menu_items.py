@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.schemas.modifiers import ModifierGroupResponse
+from app.api.schemas.modifiers import ModifierGroupCreate, ModifierGroupResponse
 from app.domain.enums import MenuItemStatus
 
 
@@ -26,6 +26,7 @@ class MenuItemBase(BaseModel):
     is_featured: bool = False
     preparation_time_minutes: int = Field(default=15, ge=0)
     allergens: list[str] = Field(default_factory=list)
+    modifier_groups: list[ModifierGroupCreate] = Field(default_factory=list)
 
 
 class MenuItemCreate(MenuItemBase):
@@ -51,6 +52,7 @@ class MenuItemUpdate(BaseModel):
     is_featured: bool | None = None
     preparation_time_minutes: int | None = Field(default=None, ge=0)
     allergens: list[str] | None = None
+    modifier_groups: list[ModifierGroupCreate] | None = None
 
 
 class MenuItemResponse(MenuItemBase):

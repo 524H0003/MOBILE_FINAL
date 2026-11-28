@@ -35,6 +35,7 @@ from app.domain.entities import (
     User,
 )
 from app.domain.enums import (
+    DeliveryProvider,
     DiscountType,
     PaymentMethod,
     PaymentStatus,
@@ -146,7 +147,12 @@ def map_restaurant(restaurant: Restaurant) -> RestaurantResponse:
         delivery_radius_km=restaurant.delivery_radius_km,
         minimum_order_amount=_money(restaurant.min_order_amount),
         delivery_fee=_money(restaurant.delivery_fee),
-        status=RestaurantStatus.ACTIVE if restaurant.is_active else RestaurantStatus.SUSPENDED,
+        status=(
+            RestaurantStatus.SUSPENDED if not restaurant.is_active else RestaurantStatus(restaurant.status)
+        ),
+        busy_until=restaurant.busy_until,
+        weekly_schedule=restaurant.weekly_schedule,
+        custom_schedules=restaurant.custom_schedules,
         avatar_url=restaurant.logo_url,
         cover_url=restaurant.cover_image_url,
         created_at=restaurant.created_at,
@@ -160,7 +166,9 @@ def map_restaurant_summary(restaurant: Restaurant) -> RestaurantSummaryResponse:
         id=restaurant.id,
         name=restaurant.name,
         cuisine_type=None,
-        status=RestaurantStatus.ACTIVE if restaurant.is_active else RestaurantStatus.SUSPENDED,
+        status=(
+            RestaurantStatus.SUSPENDED if not restaurant.is_active else RestaurantStatus(restaurant.status)
+        ),
         minimum_order_amount=_money(restaurant.min_order_amount),
         delivery_fee=_money(restaurant.delivery_fee),
         avatar_url=restaurant.logo_url,
@@ -234,6 +242,7 @@ def map_promotion(promotion: Promotion) -> PromotionResponse:
         start_date=promotion.start_at.date(),
         end_date=promotion.end_at.date(),
         usage_limit=promotion.usage_limit,
+        user_usage_limit=promotion.user_usage_limit,
         status=PromotionStatus.ACTIVE if promotion.is_active else PromotionStatus.INACTIVE,
         applicable_item_ids=promotion.applicable_menu_item_ids,
         applicable_category_ids=promotion.applicable_category_ids,
@@ -252,6 +261,11 @@ def map_order_item(item: OrderItem) -> OrderItemResponse:
         quantity=item.quantity,
         subtotal=_money(item.subtotal),
         special_instructions=item.note,
+        modifiers=[
+            ModifierResponse(id=mod.id, name=mod.name, price=mod.price)
+            for mod in item.modifiers
+        ],
+        allergens=item.allergens,
     )
 
 
@@ -272,6 +286,7 @@ def map_order(
         delivery_fee=_money(order.delivery_fee),
         total_amount=_money(order.total_amount),
         delivery_address=_address(order.delivery_address),
+        delivery_provider=DeliveryProvider(order.delivery_provider),
         promotion_code=order.promotion_code,
         notes=order.customer_note,
         scheduled_for=None,
@@ -322,6 +337,10 @@ def map_delivery(delivery: Delivery) -> DeliveryResponse:
         provider_order_id=delivery.provider_order_id,
         driver_name=delivery.driver_name,
         driver_phone=_phone_optional(delivery.driver_phone),
+        driver_vehicle=delivery.driver_vehicle,
+        driver_license_plate=delivery.driver_license_plate,
+        distance_km=delivery.distance_km,
+        estimated_duration_minutes=delivery.estimated_duration_minutes,
         tracking_url=delivery.tracking_url,
         pickup_address=_delivery_address(delivery.pickup_address),
         dropoff_address=_delivery_address(delivery.dropoff_address),

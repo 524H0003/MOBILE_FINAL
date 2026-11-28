@@ -16,6 +16,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +27,7 @@ from app.domain.enums import (
     OrderStatus,
     PaymentStatus,
     PromotionType,
+    RestaurantStatus,
     UserRole,
 )
 from app.orm.base import Base, TimestampMixin
@@ -83,7 +85,12 @@ class Restaurant(Base, TimestampMixin):
     delivery_radius_km: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=5.0)
     rating: Mapped[Decimal] = mapped_column(Numeric(2, 1), nullable=False, default=0.0)
     total_reviews: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[RestaurantStatus] = mapped_column(
+        Enum(RestaurantStatus), default=RestaurantStatus.ACTIVE, nullable=False
+    )
     busy_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    weekly_schedule: Mapped[str | None] = mapped_column(Text, nullable=True)
+    custom_schedules: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     owner: Mapped[User] = relationship("User", back_populates="restaurants")
     categories: Mapped[list[Category]] = relationship(
@@ -193,6 +200,9 @@ class Order(Base, TimestampMixin):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     promotion_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("promotions.id"), nullable=True)
     promotion_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    delivery_provider: Mapped[DeliveryProvider] = mapped_column(
+        Enum(DeliveryProvider), default=DeliveryProvider.AHAMOVE, nullable=False
+    )
     street: Mapped[str] = mapped_column(String(200), nullable=False)
     ward: Mapped[str] = mapped_column(String(100), nullable=False)
     district: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -233,10 +243,16 @@ class OrderItem(Base, TimestampMixin):
     menu_item_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    allergens: Mapped[str | None] = mapped_column(Text, nullable=True)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
 
     order: Mapped[Order] = relationship("Order", back_populates="items")
     menu_item: Mapped[MenuItem] = relationship("MenuItem", back_populates="order_items")
+    modifiers: Mapped[list[Modifier]] = relationship(
+        "Modifier",
+        secondary="order_item_modifiers",
+        backref="order_items",
+    )
 
 
 class Payment(Base, TimestampMixin):
@@ -349,4 +365,18 @@ class Modifier(Base, TimestampMixin):
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
 
     group: Mapped[ModifierGroup] = relationship("ModifierGroup", back_populates="modifiers")
+
+
+class OrderItemModifier(Base, TimestampMixin):
+    """Order item modifier junction table."""
+
+    __tablename__ = "order_item_modifiers"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    order_item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("order_items.id"), nullable=False)
+    modifier_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("modifiers.id"), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("order_item_id", "modifier_id", name="uq_order_item_modifiers_order_item_modifier"),
+    )
 

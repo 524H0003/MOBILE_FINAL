@@ -22,7 +22,7 @@ class Modifier(DomainEntity):
 class ModifierGroup(DomainEntity):
     """Group of modifiers (e.g., Size, Toppings)."""
 
-    menu_item_id: uuid.UUID
+    menu_item_id: uuid.UUID | None = None
     name: str = Field(..., min_length=1, max_length=200)
     min_selection: int = Field(default=0, ge=0)
     max_selection: int = Field(default=1, ge=1)

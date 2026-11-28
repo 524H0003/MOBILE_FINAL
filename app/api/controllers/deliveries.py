@@ -10,8 +10,16 @@ from fastapi_controller import controller
 from app.api.controllers.base import BaseController
 from app.api.deps.auth import CurrentUser, DbSession
 from app.api.mappers import map_delivery
-from app.api.schemas.deliveries import DeliveryDispatchRequest, DeliveryResponse, DeliveryTrackingUpdate
+from app.api.schemas.deliveries import (
+    DeliveryAddress,
+    DeliveryDispatchRequest,
+    DeliveryQuoteRequest,
+    DeliveryQuoteResponse,
+    DeliveryResponse,
+    DeliveryTrackingUpdate,
+)
 from app.domain.enums import UserRole
+from app.domain.value_objects import Address, Coordinates
 from app.services.delivery import DeliveryService
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -34,6 +42,42 @@ def typed_patch(path: str) -> Callable[[F], F]:
 
 class DeliveryController(BaseController):  # type: ignore[misc]
     """Delivery endpoints."""
+
+    @typed_post("/quote")
+    async def quote_delivery(
+        self, request: DeliveryQuoteRequest, session: DbSession, current_user: CurrentUser
+    ) -> DeliveryQuoteResponse:
+        """Quote shipping fee from AhaMove/Lalamove before payment."""
+        service = DeliveryService(session)
+
+        def to_address(value: DeliveryAddress) -> Address:
+            return Address(
+                street=value.street,
+                ward=value.ward,
+                district=value.district,
+                city=value.city,
+                latitude=float(value.latitude) if value.latitude is not None else None,
+                longitude=float(value.longitude) if value.longitude is not None else None,
+            )
+
+        pickup = to_address(request.pickup)
+        dropoff = to_address(request.dropoff)
+        quote = await service.get_quote(
+            pickup=pickup,
+            dropoff=dropoff,
+            provider=request.provider,
+            pickup_coordinates=(
+                Coordinates(latitude=pickup.latitude, longitude=pickup.longitude)
+                if pickup.latitude is not None and pickup.longitude is not None
+                else None
+            ),
+            dropoff_coordinates=(
+                Coordinates(latitude=dropoff.latitude, longitude=dropoff.longitude)
+                if dropoff.latitude is not None and dropoff.longitude is not None
+                else None
+            ),
+        )
+        return DeliveryQuoteResponse.model_validate(quote)
 
     @typed_get("/{order_id}/delivery")
     async def get_delivery(self, order_id: UUID, session: DbSession, current_user: CurrentUser) -> DeliveryResponse:
@@ -78,6 +122,8 @@ class DeliveryController(BaseController):  # type: ignore[misc]
                 status=request.status,
                 driver_name=request.driver_name,
                 driver_phone=request.driver_phone,
+                driver_vehicle=request.driver_vehicle,
+                driver_license_plate=request.driver_license_plate,
                 tracking_url=request.tracking_url,
             )
         except ValueError as exc:

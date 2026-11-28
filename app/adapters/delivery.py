@@ -5,8 +5,11 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Protocol
+from typing import Any, Protocol
 
+import httpx
+
+from app.config.settings import get_settings
 from app.domain.enums import DeliveryProvider, DeliveryStatus
 from app.domain.value_objects import Address, Coordinates
 
@@ -124,6 +127,94 @@ class MockDeliveryAdapter:
         )
 
 
+class HttpDeliveryAdapter:
+    """HTTP adapter for real AhaMove/Lalamove APIs."""
+
+    def __init__(self, provider: DeliveryProvider) -> None:
+        self.provider = provider
+        settings = get_settings()
+        if provider == DeliveryProvider.AHAMOVE:
+            self.base_url = settings.ahamove_base_url
+            self.api_key = settings.ahamove_api_key
+            self.api_secret = settings.ahamove_api_secret
+        else:
+            self.base_url = settings.lalamove_base_url
+            self.api_key = settings.lalamove_api_key
+            self.api_secret = settings.lalamove_api_secret
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "X-API-Secret": self.api_secret,
+            "Content-Type": "application/json",
+        }
+
+    @staticmethod
+    def _coordinates(coordinates: Coordinates | None) -> dict[str, float]:
+        if coordinates is None:
+            return {}
+        return {"lat": coordinates.latitude, "lng": coordinates.longitude}
+
+    async def get_quote(
+        self,
+        *,
+        pickup: Address,
+        dropoff: Address,
+        pickup_coordinates: Coordinates | None = None,
+        dropoff_coordinates: Coordinates | None = None,
+    ) -> DeliveryQuote:
+        """Request a quote from the configured provider endpoint."""
+        payload = {
+            "pickup": {"address": pickup.full_address(), **self._coordinates(pickup_coordinates)},
+            "dropoff": {"address": dropoff.full_address(), **self._coordinates(dropoff_coordinates)},
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(f"{self.base_url}/quote", json=payload, headers=self._headers())
+            response.raise_for_status()
+            data: dict[str, Any] = response.json()
+        return DeliveryQuote(
+            provider=self.provider,
+            fee=Decimal(str(data["fee"])),
+            distance_km=Decimal(str(data.get("distance_km", 0))),
+            estimated_duration_minutes=int(data.get("estimated_duration_minutes", 0)),
+        )
+
+    async def create_booking(
+        self,
+        *,
+        order_id: uuid.UUID,
+        pickup: Address,
+        dropoff: Address,
+        pickup_coordinates: Coordinates | None = None,
+        dropoff_coordinates: Coordinates | None = None,
+        cod_amount: Decimal | None = None,
+        notes: str | None = None,
+    ) -> DeliveryBooking:
+        """Create a delivery booking with the configured provider."""
+        payload = {
+            "order_id": str(order_id),
+            "pickup": {"address": pickup.full_address(), **self._coordinates(pickup_coordinates)},
+            "dropoff": {"address": dropoff.full_address(), **self._coordinates(dropoff_coordinates)},
+            "cod_amount": str(cod_amount) if cod_amount is not None else None,
+            "notes": notes,
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(f"{self.base_url}/bookings", json=payload, headers=self._headers())
+            response.raise_for_status()
+            data = response.json()
+        return DeliveryBooking(
+            provider_order_id=str(data["provider_order_id"]),
+            status=DeliveryStatus(data.get("status", DeliveryStatus.DRIVER_ASSIGNED.value)),
+            driver_name=data.get("driver_name"),
+            driver_phone=data.get("driver_phone"),
+            driver_vehicle=data.get("driver_vehicle"),
+            driver_license_plate=data.get("driver_license_plate"),
+            tracking_url=data.get("tracking_url"),
+        )
+
+
 def get_delivery_adapter(provider: DeliveryProvider) -> DeliveryProviderAdapter:
-    """Get delivery provider adapter."""
+    """Get delivery provider adapter based on configuration."""
+    if get_settings().delivery_provider_mode.upper() == "LIVE":
+        return HttpDeliveryAdapter(provider)
     return MockDeliveryAdapter(provider)

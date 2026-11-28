@@ -8,7 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.enums import OrderStatus, PaymentStatus
+from app.api.schemas.modifiers import ModifierResponse
+from app.domain.enums import DeliveryProvider, OrderStatus, PaymentStatus
 
 
 class OrderItemCreate(BaseModel):
@@ -19,6 +20,7 @@ class OrderItemCreate(BaseModel):
     menu_item_id: UUID
     quantity: int = Field(..., ge=1, le=100)
     special_instructions: str | None = Field(default=None, max_length=500)
+    modifier_ids: list[UUID] = Field(default_factory=list)
 
 
 class OrderItemResponse(BaseModel):
@@ -33,6 +35,8 @@ class OrderItemResponse(BaseModel):
     quantity: int
     subtotal: Decimal
     special_instructions: str | None = None
+    modifiers: list[ModifierResponse] = Field(default_factory=list)
+    allergens: list[str] = Field(default_factory=list)
 
 
 class OrderAddress(BaseModel):
@@ -59,6 +63,7 @@ class OrderCreate(BaseModel):
     items: list[OrderItemCreate] = Field(..., min_length=1)
     delivery_address: OrderAddress
     promotion_code: str | None = Field(default=None, max_length=50)
+    delivery_provider: DeliveryProvider = DeliveryProvider.AHAMOVE
     notes: str | None = Field(default=None, max_length=1000)
     scheduled_for: datetime | None = None
 
@@ -89,6 +94,7 @@ class OrderResponse(BaseModel):
     delivery_fee: Decimal
     total_amount: Decimal
     delivery_address: OrderAddress
+    delivery_provider: DeliveryProvider = DeliveryProvider.AHAMOVE
     promotion_code: str | None = None
     notes: str | None = None
     scheduled_for: datetime | None = None
