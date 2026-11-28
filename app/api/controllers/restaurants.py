@@ -152,14 +152,15 @@ class RestaurantController(BaseController):  # type: ignore[misc]
             target_name = field_aliases.get(field_name, field_name)
             if not hasattr(restaurant, target_name):
                 continue
-            if value is not None:
+            transformed_value = value
+            if transformed_value is not None:
                 if target_name in time_fields:
-                    value = value.strftime("%H:%M")
+                    transformed_value = transformed_value.strftime("%H:%M")
                 elif target_name in money_fields:
-                    value = Money(amount=value)
+                    transformed_value = Money(amount=transformed_value)
                 elif target_name == "phone":
-                    value = PhoneNumber(number=PhoneNumber.normalize(value))
-            setattr(restaurant, target_name, value)
+                    transformed_value = PhoneNumber(number=PhoneNumber.normalize(transformed_value))
+            setattr(restaurant, target_name, transformed_value)
         restaurant.touch()
         saved = await repo.update(restaurant)
         return map_restaurant(saved)

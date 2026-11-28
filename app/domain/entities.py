@@ -61,6 +61,19 @@ class Restaurant(DomainEntity):
     weekly_schedule: dict[str, dict[str, object]] = Field(default_factory=dict)
     custom_schedules: list[dict[str, object]] = Field(default_factory=list)
 
+    @staticmethod
+    def _is_open_in_schedule(config: dict[str, object], current_time: time) -> bool:
+        """Check one schedule entry against the current time."""
+        if config.get("closed") is True:
+            return False
+        start_raw = config.get("open")
+        end_raw = config.get("close")
+        if start_raw is None or end_raw is None:
+            return True
+        start = time.fromisoformat(str(start_raw))
+        end = time.fromisoformat(str(end_raw))
+        return start <= current_time <= end
+
     def is_open_at(self, at: datetime | None = None) -> bool:
         """Check opening hours, custom exceptions, and temporary busy status."""
         now = at or datetime.utcnow()
@@ -71,25 +84,17 @@ class Restaurant(DomainEntity):
 
         day = now.strftime("%A").lower()
         current_time = now.time()
-        for schedule in self.custom_schedules:
-            if str(schedule.get("date")) != now.date().isoformat():
-                continue
-            if schedule.get("closed") is True:
-                return False
-            start = time.fromisoformat(str(schedule["open"]))
-            end = time.fromisoformat(str(schedule["close"]))
-            return start <= current_time <= end
 
+        # Check custom schedules first
+        for schedule in self.custom_schedules:
+            if str(schedule.get("date")) == now.date().isoformat():
+                return self._is_open_in_schedule(schedule, current_time)
+
+        # Check weekly schedule
         config = self.weekly_schedule.get(day)
         if config is None:
-            # opening_time/closing_time are displayed to customers; explicit
-            # weekly/custom schedules are what gate ordering.
             return True
-        if config.get("closed") is True:
-            return False
-        start = time.fromisoformat(str(config["open"]))
-        end = time.fromisoformat(str(config["close"]))
-        return start <= current_time <= end
+        return self._is_open_in_schedule(config, current_time)
 
 
 class Category(DomainEntity):

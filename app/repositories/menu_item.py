@@ -66,60 +66,8 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
         for column in model.__table__.columns:
             setattr(model, column.name, getattr(updated, column.name))
 
-        # Update modifier groups - delete existing and recreate
-        # Get existing modifier group IDs
-        existing_group_ids = {g.id for g in model.modifier_groups}
-        new_group_ids = {g.id for g in entity.modifier_groups}
-
-        # Delete removed groups (and their modifiers via cascade)
-        for group in model.modifier_groups:
-            if group.id not in new_group_ids:
-                await self._session.delete(group)
-
-        # Update or create modifier groups
-        for domain_group in entity.modifier_groups:
-            if domain_group.id in existing_group_ids:
-                # Update existing group
-                group_stmt = select(ModifierGroupModel).where(ModifierGroupModel.id == domain_group.id)
-                group_result = await self._session.execute(group_stmt)
-                group_model: ModifierGroupModel | None = group_result.scalar_one_or_none()
-                if group_model:
-                    group_model.name = domain_group.name
-                    group_model.min_selection = domain_group.min_selection
-                    group_model.max_selection = domain_group.max_selection
-                    group_model.display_order = domain_group.display_order
-                    group_model.updated_at = domain_group.updated_at
-
-                    # Update modifiers - delete existing and recreate
-                    existing_mod_ids = {m.id for m in group_model.modifiers}
-                    new_mod_ids = {m.id for m in domain_group.modifiers}
-
-                    for mod in group_model.modifiers:
-                        if mod.id not in new_mod_ids:
-                            await self._session.delete(mod)
-
-                    for modifier in domain_group.modifiers:
-                        if modifier.id in existing_mod_ids:
-                            # Update existing modifier
-                            mod_stmt = select(ModifierModel).where(ModifierModel.id == modifier.id)
-                            mod_result = await self._session.execute(mod_stmt)
-                            mod_model: ModifierModel | None = mod_result.scalar_one_or_none()
-                            if mod_model:
-                                mod_model.name = modifier.name
-                                mod_model.price = modifier.price.amount
-                                mod_model.updated_at = modifier.updated_at
-                        else:
-                            # Create new modifier
-                            mod_model = self._modifier_to_model(group_model, modifier)
-                            self._session.add(mod_model)
-            else:
-                # Create new group
-                group_model = self._modifier_group_to_model(entity, domain_group)
-                self._session.add(group_model)
-                await self._session.flush()
-                for modifier in domain_group.modifiers:
-                    mod_model = self._modifier_to_model(group_model, modifier)
-                    self._session.add(mod_model)
+        # Update modifier groups
+        await self._update_modifier_groups(model, entity)
 
         await self._session.flush()
         stmt = (
@@ -240,6 +188,82 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
             name=modifier.name,
             price=modifier.price.amount,
         )
+
+    async def _update_modifier_groups(
+        self, model: MenuItemModel, entity: DomainMenuItem
+    ) -> None:
+        """Update modifier groups and their modifiers."""
+        existing_group_ids = {g.id for g in model.modifier_groups}
+        new_group_ids = {g.id for g in entity.modifier_groups}
+
+        # Delete removed groups (and their modifiers via cascade)
+        for group in model.modifier_groups:
+            if group.id not in new_group_ids:
+                await self._session.delete(group)
+
+        # Update or create modifier groups
+        for domain_group in entity.modifier_groups:
+            if domain_group.id in existing_group_ids:
+                await self._update_existing_group(domain_group)
+            else:
+                await self._create_new_group(entity, domain_group)
+
+    async def _update_existing_group(self, domain_group: DomainModifierGroup) -> None:
+        """Update an existing modifier group and its modifiers."""
+        group_stmt = select(ModifierGroupModel).where(ModifierGroupModel.id == domain_group.id)
+        group_result = await self._session.execute(group_stmt)
+        group_model: ModifierGroupModel | None = group_result.scalar_one_or_none()
+        if not group_model:
+            return
+
+        group_model.name = domain_group.name
+        group_model.min_selection = domain_group.min_selection
+        group_model.max_selection = domain_group.max_selection
+        group_model.display_order = domain_group.display_order
+        group_model.updated_at = domain_group.updated_at
+
+        # Update modifiers - delete existing and recreate
+        existing_mod_ids = {m.id for m in group_model.modifiers}
+        new_mod_ids = {m.id for m in domain_group.modifiers}
+
+        for mod in group_model.modifiers:
+            if mod.id not in new_mod_ids:
+                await self._session.delete(mod)
+
+        for modifier in domain_group.modifiers:
+            if modifier.id in existing_mod_ids:
+                await self._update_existing_modifier(group_model, modifier)
+            else:
+                await self._create_new_modifier(group_model, modifier)
+
+    async def _update_existing_modifier(
+        self, group_model: ModifierGroupModel, modifier: DomainModifier
+    ) -> None:
+        """Update an existing modifier."""
+        mod_stmt = select(ModifierModel).where(ModifierModel.id == modifier.id)
+        mod_result = await self._session.execute(mod_stmt)
+        mod_model: ModifierModel | None = mod_result.scalar_one_or_none()
+        if mod_model:
+            mod_model.name = modifier.name
+            mod_model.price = modifier.price.amount
+            mod_model.updated_at = modifier.updated_at
+
+    async def _create_new_modifier(
+        self, group_model: ModifierGroupModel, modifier: DomainModifier
+    ) -> None:
+        """Create a new modifier."""
+        mod_model = self._modifier_to_model(group_model, modifier)
+        self._session.add(mod_model)
+
+    async def _create_new_group(
+        self, entity: DomainMenuItem, domain_group: DomainModifierGroup
+    ) -> None:
+        """Create a new modifier group with its modifiers."""
+        group_model = self._modifier_group_to_model(entity, domain_group)
+        self._session.add(group_model)
+        await self._session.flush()
+        for modifier in domain_group.modifiers:
+            await self._create_new_modifier(group_model, modifier)
 
     async def get_by_restaurant(
         self, restaurant_id: uuid.UUID, *, limit: int = 100, offset: int = 0

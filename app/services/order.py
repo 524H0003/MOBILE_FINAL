@@ -10,8 +10,10 @@ from typing import TypedDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.entities import MenuItem as DomainMenuItem
 from app.domain.entities import Order as DomainOrder
 from app.domain.entities import OrderItem as DomainOrderItem
+from app.domain.entities import Restaurant as DomainRestaurant
 from app.domain.enums import DeliveryProvider, OrderStatus, PaymentStatus, PromotionType
 from app.domain.modifiers import Modifier as DomainModifier
 from app.domain.value_objects import Address, Coordinates, Money
@@ -56,7 +58,7 @@ class OrderService:
         self._restaurant_repo = RestaurantRepository(session)
         self._delivery_service = DeliveryService(session)
 
-    async def create_order(  # noqa: PLR0912
+    async def create_order(
         self,
         *,
         customer_id: uuid.UUID,
@@ -69,7 +71,39 @@ class OrderService:
         scheduled_for: datetime | None = None,
     ) -> DomainOrder:
         """Create a new order with items and calculate totals."""
-        # Verify restaurant exists and is open for ordering
+        restaurant = await self._validate_restaurant(restaurant_id)
+        order_items, subtotal = await self._build_order_items(items)
+        self._validate_minimum_order(subtotal, restaurant)
+
+        delivery_fee, dropoff_coordinates = await self._calculate_delivery_fee(
+            restaurant, delivery_address, delivery_provider
+        )
+
+        discount_amount, promotion_id = await self._apply_promotion(
+            promotion_code, restaurant_id, customer_id, subtotal
+        )
+
+        order = self._create_order(
+            customer_id=customer_id,
+            restaurant_id=restaurant_id,
+            items=order_items,
+            subtotal=subtotal,
+            delivery_fee=delivery_fee,
+            discount_amount=discount_amount,
+            promotion_id=promotion_id,
+            promotion_code=promotion_code,
+            delivery_provider=delivery_provider,
+            delivery_address=delivery_address,
+            delivery_coordinates=dropoff_coordinates,
+            customer_note=notes,
+        )
+
+        saved_order = await self._save_order(order, promotion_id)
+        await NotificationService(self._session).notify_order_created(saved_order)
+        return saved_order
+
+    async def _validate_restaurant(self, restaurant_id: uuid.UUID) -> DomainRestaurant:
+        """Validate restaurant exists and is open for ordering."""
         restaurant = await self._restaurant_repo.get(restaurant_id)
         if not restaurant:
             raise ValueError("Restaurant not found")
@@ -77,8 +111,10 @@ class OrderService:
             raise ValueError("Restaurant is not active")
         if not restaurant.is_open_at():
             raise ValueError("Restaurant is closed or busy")
+        return restaurant
 
-        # Verify menu items exist and are available
+    async def _build_order_items(self, items: list[OrderItemInput]) -> tuple[list[DomainOrderItem], Decimal]:
+        """Build order items with modifiers and calculate subtotal."""
         order_items: list[DomainOrderItem] = []
         subtotal = Decimal("0")
 
@@ -93,52 +129,9 @@ class OrderService:
             special_instructions = item_data.get("special_instructions")
             modifier_ids = item_data.get("modifier_ids", [])
 
-            # Validate and load modifiers if any
-            modifiers: list[DomainModifier] = []
-            if modifier_ids:
-                # Get all modifiers for this menu item's modifier groups
-                all_modifier_ids = set()
-                for group in menu_item.modifier_groups:
-                    for mod in group.modifiers:
-                        all_modifier_ids.add(mod.id)
-
-                # Check that all selected modifiers belong to this menu item
-                invalid_modifiers = [mid for mid in modifier_ids if mid not in all_modifier_ids]
-                if invalid_modifiers:
-                    raise ValueError(f"Invalid modifier IDs for menu item {menu_item.name}: {invalid_modifiers}")
-
-                # Validate selection constraints per modifier group
-                for group in menu_item.modifier_groups:
-                    group_modifier_ids = [mid for mid in modifier_ids if any(m.id == mid for m in group.modifiers)]
-                    selected_count = len(group_modifier_ids)
-                    if selected_count < group.min_selection:
-                        raise ValueError(
-                            f"Modifier group '{group.name}' requires at least {group.min_selection} selection(s)"
-                        )
-                    if selected_count > group.max_selection:
-                        raise ValueError(
-                            f"Modifier group '{group.name}' allows at most {group.max_selection} selection(s)"
-                        )
-
-                # Load the modifier domain entities
-                for mod_id in modifier_ids:
-                    stmt = select(ModifierModel).where(ModifierModel.id == mod_id)
-                    result = await self._session.execute(stmt)
-                    mod_model = result.scalar_one_or_none()
-                    if mod_model:
-                        modifiers.append(
-                            DomainModifier(
-                                id=mod_model.id,
-                                created_at=mod_model.created_at,
-                                updated_at=mod_model.updated_at,
-                                group_id=mod_model.group_id,
-                                name=mod_model.name,
-                                price=Money(amount=mod_model.price),
-                            )
-                        )
-
+            modifiers = await self._load_modifiers(menu_item, modifier_ids)
             order_item = DomainOrderItem.create(
-                order_id=uuid.uuid4(),  # temporary, will be set after order creation
+                order_id=uuid.uuid4(),
                 menu_item_id=menu_item.id,
                 menu_item_name=menu_item.name,
                 menu_item_price=menu_item.price,
@@ -150,10 +143,70 @@ class OrderService:
             order_items.append(order_item)
             subtotal += order_item.subtotal.amount
 
+        return order_items, subtotal
+
+    async def _load_modifiers(
+        self, menu_item: DomainMenuItem, modifier_ids: list[uuid.UUID]
+    ) -> list[DomainModifier]:
+        """Load and validate modifiers for a menu item."""
+        if not modifier_ids:
+            return []
+
+        # Get all modifiers for this menu item's modifier groups
+        all_modifier_ids = set()
+        for group in menu_item.modifier_groups:
+            for mod in group.modifiers:
+                all_modifier_ids.add(mod.id)
+
+        # Check that all selected modifiers belong to this menu item
+        invalid_modifiers = [mid for mid in modifier_ids if mid not in all_modifier_ids]
+        if invalid_modifiers:
+            raise ValueError(f"Invalid modifier IDs for menu item {menu_item.name}: {invalid_modifiers}")
+
+        # Validate selection constraints per modifier group
+        for group in menu_item.modifier_groups:
+            group_modifier_ids = [mid for mid in modifier_ids if any(m.id == mid for m in group.modifiers)]
+            selected_count = len(group_modifier_ids)
+            if selected_count < group.min_selection:
+                raise ValueError(
+                    f"Modifier group '{group.name}' requires at least {group.min_selection} selection(s)"
+                )
+            if selected_count > group.max_selection:
+                raise ValueError(
+                    f"Modifier group '{group.name}' allows at most {group.max_selection} selection(s)"
+                )
+
+        # Load the modifier domain entities
+        modifiers: list[DomainModifier] = []
+        for mod_id in modifier_ids:
+            stmt = select(ModifierModel).where(ModifierModel.id == mod_id)
+            result = await self._session.execute(stmt)
+            mod_model = result.scalar_one_or_none()
+            if mod_model:
+                modifiers.append(
+                    DomainModifier(
+                        id=mod_model.id,
+                        created_at=mod_model.created_at,
+                        updated_at=mod_model.updated_at,
+                        group_id=mod_model.group_id,
+                        name=mod_model.name,
+                        price=Money(amount=mod_model.price),
+                    )
+                )
+        return modifiers
+
+    def _validate_minimum_order(self, subtotal: Decimal, restaurant: DomainRestaurant) -> None:
+        """Validate minimum order amount."""
         if subtotal < restaurant.min_order_amount.amount:
             raise ValueError(f"Minimum order amount is {restaurant.min_order_amount}")
 
-        # Automatic distance-based shipping quote shown before payment.
+    async def _calculate_delivery_fee(
+        self,
+        restaurant: DomainRestaurant,
+        delivery_address: AddressInput,
+        delivery_provider: DeliveryProvider,
+    ) -> tuple[Decimal, Coordinates | None]:
+        """Calculate delivery fee and dropoff coordinates."""
         pickup_coordinates = (
             Coordinates(
                 latitude=restaurant.address.latitude,
@@ -179,39 +232,68 @@ class OrderService:
         )
         quote_fee = Decimal(str(quote["fee"]))
         delivery_fee = max(restaurant.delivery_fee.amount, quote_fee)
+        return delivery_fee, dropoff_coordinates
 
-        # Apply promotion if provided. Vouchers never reduce shipping.
+    async def _apply_promotion(
+        self,
+        promotion_code: str | None,
+        restaurant_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        subtotal: Decimal,
+    ) -> tuple[Decimal, uuid.UUID | None]:
+        """Apply promotion if provided and return discount amount and promotion ID."""
         discount_amount = Decimal("0")
         promotion_id = None
-        promo = None
-        if promotion_code:
-            promotions = await self._promotion_repo.get_active_by_restaurant(restaurant_id)
-            promo = next((p for p in promotions if p.name == promotion_code), None)
-            if promo and promo.is_valid():
-                if promo.min_order_amount and subtotal < promo.min_order_amount.amount:
-                    raise ValueError(f"Minimum order amount for this promotion is {promo.min_order_amount}")
-                used = await self._order_repo.count_by_customer_and_promotion(customer_id, promo.id)
-                if used >= promo.user_usage_limit:
-                    raise ValueError("Promotion usage limit reached for this customer")
-                if promo.type == PromotionType.PERCENTAGE:
-                    discount_amount = subtotal * (promo.value / Decimal("100"))
-                    if promo.max_discount_amount:
-                        discount_amount = min(discount_amount, promo.max_discount_amount.amount)
-                elif promo.type == PromotionType.FIXED_AMOUNT:
-                    discount_amount = min(promo.value, subtotal)
-                # FREE_DELIVERY is intentionally not applied to shipping.
-                promotion_id = promo.id
+
+        if not promotion_code:
+            return discount_amount, promotion_id
+
+        promotions = await self._promotion_repo.get_active_by_restaurant(restaurant_id)
+        promo = next((p for p in promotions if p.name == promotion_code), None)
+        if not promo or not promo.is_valid():
+            return discount_amount, promotion_id
+
+        if promo.min_order_amount and subtotal < promo.min_order_amount.amount:
+            raise ValueError(f"Minimum order amount for this promotion is {promo.min_order_amount}")
+        used = await self._order_repo.count_by_customer_and_promotion(customer_id, promo.id)
+        if used >= promo.user_usage_limit:
+            raise ValueError("Promotion usage limit reached for this customer")
+
+        if promo.type == PromotionType.PERCENTAGE:
+            discount_amount = subtotal * (promo.value / Decimal("100"))
+            if promo.max_discount_amount:
+                discount_amount = min(discount_amount, promo.max_discount_amount.amount)
+        elif promo.type == PromotionType.FIXED_AMOUNT:
+            discount_amount = min(promo.value, subtotal)
+        # FREE_DELIVERY is intentionally not applied to shipping.
+        promotion_id = promo.id
 
         # Ensure discount doesn't exceed subtotal and money has at most 2 decimals.
         discount_amount = min(discount_amount, subtotal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return discount_amount, promotion_id
 
+    def _create_order(
+        self,
+        *,
+        customer_id: uuid.UUID,
+        restaurant_id: uuid.UUID,
+        items: list[DomainOrderItem],
+        subtotal: Decimal,
+        delivery_fee: Decimal,
+        discount_amount: Decimal,
+        promotion_id: uuid.UUID | None,
+        promotion_code: str | None,
+        delivery_provider: DeliveryProvider,
+        delivery_address: AddressInput,
+        delivery_coordinates: Coordinates | None,
+        customer_note: str | None,
+    ) -> DomainOrder:
+        """Create order domain entity."""
         total_amount = subtotal + delivery_fee - discount_amount
-
-        # Create order
         order = DomainOrder(
             customer_id=customer_id,
             restaurant_id=restaurant_id,
-            items=order_items,
+            items=items,
             subtotal=Money(amount=subtotal),
             delivery_fee=Money(amount=delivery_fee),
             discount_amount=Money(amount=discount_amount),
@@ -220,25 +302,24 @@ class OrderService:
             promotion_code=promotion_code,
             delivery_provider=delivery_provider,
             delivery_address=Address(**delivery_address),
-            delivery_coordinates=dropoff_coordinates,
-            customer_note=notes,
+            delivery_coordinates=delivery_coordinates,
+            customer_note=customer_note,
         )
-
         # Set order_id on items
         for item in order.items:
             item.order_id = order.id
+        return order
 
-        # Save order
+    async def _save_order(self, order: DomainOrder, promotion_id: uuid.UUID | None) -> DomainOrder:
+        """Save order and update promotion usage count."""
         saved_order = await self._order_repo.add(order)
 
-        # Update promotion usage count if used
         if promotion_id:
             promo = await self._promotion_repo.get(promotion_id)
             if promo:
                 promo.usage_count += 1
                 await self._promotion_repo.update(promo)
 
-        await NotificationService(self._session).notify_order_created(saved_order)
         return saved_order
 
     async def get_order(self, order_id: uuid.UUID) -> DomainOrder | None:
