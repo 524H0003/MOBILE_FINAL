@@ -16,7 +16,7 @@ class ModifierCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=200)
-    price: Decimal = Field(default=0, ge=0)
+    price: Decimal = Field(default=Decimal("0"), ge=0)
 
 
 class ModifierGroupCreate(BaseModel):

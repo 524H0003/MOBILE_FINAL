@@ -10,8 +10,11 @@ from sqlalchemy.orm import selectinload
 
 from app.domain.entities import MenuItem as DomainMenuItem
 from app.domain.enums import MenuItemStatus
-from app.domain.modifiers import Modifier as DomainModifier, ModifierGroup as DomainModifierGroup
-from app.orm.models import MenuItem as MenuItemModel, ModifierGroup as ModifierGroupModel, Modifier as ModifierModel
+from app.domain.modifiers import Modifier as DomainModifier
+from app.domain.modifiers import ModifierGroup as DomainModifierGroup
+from app.orm.models import MenuItem as MenuItemModel
+from app.orm.models import Modifier as ModifierModel
+from app.orm.models import ModifierGroup as ModifierGroupModel
 from app.repositories.base import BaseRepository
 from app.repositories.mappers import join_csv, money, money_required, split_csv
 
@@ -34,7 +37,7 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
             self._session.add(group_model)
             await self._session.flush()
             for modifier in group.modifiers:
-                modifier_model = self._modifier_to_model(group, modifier)
+                modifier_model = self._modifier_to_model(group_model, modifier)
                 self._session.add(modifier_model)
 
         await self._session.flush()
@@ -74,48 +77,48 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
                 await self._session.delete(group)
 
         # Update or create modifier groups
-        for group in entity.modifier_groups:
-            if group.id in existing_group_ids:
+        for domain_group in entity.modifier_groups:
+            if domain_group.id in existing_group_ids:
                 # Update existing group
-                group_stmt = select(ModifierGroupModel).where(ModifierGroupModel.id == group.id)
+                group_stmt = select(ModifierGroupModel).where(ModifierGroupModel.id == domain_group.id)
                 group_result = await self._session.execute(group_stmt)
-                group_model = group_result.scalar_one_or_none()
+                group_model: ModifierGroupModel | None = group_result.scalar_one_or_none()
                 if group_model:
-                    group_model.name = group.name
-                    group_model.min_selection = group.min_selection
-                    group_model.max_selection = group.max_selection
-                    group_model.display_order = group.display_order
-                    group_model.updated_at = group.updated_at
+                    group_model.name = domain_group.name
+                    group_model.min_selection = domain_group.min_selection
+                    group_model.max_selection = domain_group.max_selection
+                    group_model.display_order = domain_group.display_order
+                    group_model.updated_at = domain_group.updated_at
 
                     # Update modifiers - delete existing and recreate
                     existing_mod_ids = {m.id for m in group_model.modifiers}
-                    new_mod_ids = {m.id for m in group.modifiers}
+                    new_mod_ids = {m.id for m in domain_group.modifiers}
 
                     for mod in group_model.modifiers:
                         if mod.id not in new_mod_ids:
                             await self._session.delete(mod)
 
-                    for modifier in group.modifiers:
+                    for modifier in domain_group.modifiers:
                         if modifier.id in existing_mod_ids:
                             # Update existing modifier
                             mod_stmt = select(ModifierModel).where(ModifierModel.id == modifier.id)
                             mod_result = await self._session.execute(mod_stmt)
-                            mod_model = mod_result.scalar_one_or_none()
+                            mod_model: ModifierModel | None = mod_result.scalar_one_or_none()
                             if mod_model:
                                 mod_model.name = modifier.name
                                 mod_model.price = modifier.price.amount
                                 mod_model.updated_at = modifier.updated_at
                         else:
                             # Create new modifier
-                            mod_model = self._modifier_to_model(group, modifier)
+                            mod_model = self._modifier_to_model(group_model, modifier)
                             self._session.add(mod_model)
             else:
                 # Create new group
-                group_model = self._modifier_group_to_model(entity, group)
+                group_model = self._modifier_group_to_model(entity, domain_group)
                 self._session.add(group_model)
                 await self._session.flush()
-                for modifier in group.modifiers:
-                    mod_model = self._modifier_to_model(group, modifier)
+                for modifier in domain_group.modifiers:
+                    mod_model = self._modifier_to_model(group_model, modifier)
                     self._session.add(mod_model)
 
         await self._session.flush()
@@ -228,7 +231,7 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
             display_order=group.display_order,
         )
 
-    def _modifier_to_model(self, group: DomainModifierGroup, modifier: DomainModifier) -> ModifierModel:
+    def _modifier_to_model(self, group: ModifierGroupModel, modifier: DomainModifier) -> ModifierModel:
         return ModifierModel(
             id=modifier.id,
             created_at=modifier.created_at,

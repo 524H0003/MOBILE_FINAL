@@ -7,8 +7,10 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
+from sqlalchemy import select
 
 from app.domain.entities import Order as DomainOrder
+from app.orm.models import OrderItemModifier
 from app.repositories.order import OrderRepository
 
 
@@ -56,7 +58,6 @@ async def _add_order_without_lazy_load(self: OrderRepository, entity: DomainOrde
     await self._session.flush()
 
     # Persist order item modifiers to junction table
-    from app.orm.models import OrderItemModifier
     for item in entity.items:
         for modifier in item.modifiers:
             oim = OrderItemModifier(
@@ -74,8 +75,6 @@ async def _add_order_without_lazy_load(self: OrderRepository, entity: DomainOrde
 
 async def _update_order_without_lazy_load(self: OrderRepository, entity: DomainOrder) -> DomainOrder:
     """Update an order and read it back with eager-loaded items."""
-    from sqlalchemy import select
-
     result = await self._session.execute(select(self._model).where(self._model.id == entity.id))
     model = result.scalar_one_or_none()
     if model is None:

@@ -62,7 +62,7 @@ class RestaurantController(BaseController):  # type: ignore[misc]
             page=pagination.page,
             size=pagination.limit,
         )
-        
+
     @typed_get("/owner/mine")
     async def list_my_restaurants(self, session: DbSession, current_user: CurrentUser) -> list[RestaurantResponse]:
         """List restaurants owned by the current user."""

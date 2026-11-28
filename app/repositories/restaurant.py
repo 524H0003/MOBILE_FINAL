@@ -10,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.entities import Restaurant as DomainRestaurant
 from app.orm.models import Restaurant as RestaurantModel
 from app.repositories.base import BaseRepository
-from app.repositories.mappers import address, dumps_json, loads_json, money_required, phone
+from app.repositories.mappers import (
+    address,
+    dumps_json,
+    dumps_json_schedule,
+    loads_json_dict,
+    loads_json_schedule,
+    money_required,
+    phone,
+)
 
 
 class RestaurantRepository(BaseRepository[DomainRestaurant, RestaurantModel]):
@@ -49,8 +57,8 @@ class RestaurantRepository(BaseRepository[DomainRestaurant, RestaurantModel]):
             total_reviews=model.total_reviews,
             status=model.status,
             busy_until=model.busy_until,
-            weekly_schedule=loads_json(model.weekly_schedule),
-            custom_schedules=list(loads_json(model.custom_schedules).get("items", [])),
+            weekly_schedule=loads_json_schedule(model.weekly_schedule),
+            custom_schedules=list(loads_json_dict(model.custom_schedules).get("items", []) or []),  # type: ignore[arg-type]
         )
 
     def _to_model(self, entity: DomainRestaurant) -> RestaurantModel:
@@ -81,8 +89,8 @@ class RestaurantRepository(BaseRepository[DomainRestaurant, RestaurantModel]):
             total_reviews=entity.total_reviews,
             status=entity.status,
             busy_until=entity.busy_until,
-            weekly_schedule=dumps_json(entity.weekly_schedule),
-            custom_schedules=dumps_json({"items": entity.custom_schedules}),
+            weekly_schedule=dumps_json_schedule(entity.weekly_schedule),
+            custom_schedules=dumps_json({"items": entity.custom_schedules} if entity.custom_schedules else None),
         )
 
     async def get_by_owner(self, owner_id: uuid.UUID, *, limit: int = 100, offset: int = 0) -> list[DomainRestaurant]:

@@ -7,8 +7,8 @@ from collections.abc import AsyncGenerator, Callable
 from typing import Any, TypeVar, cast
 
 from fastapi import HTTPException, status
-from fastapi_controller import controller
 from fastapi.responses import StreamingResponse
+from fastapi_controller import controller
 
 from app.api.controllers.base import BaseController
 from app.api.deps.auth import CurrentUser
@@ -34,7 +34,7 @@ class NotificationController(BaseController):  # type: ignore[misc]
         hub = get_notification_hub()
         queue = hub.subscribe(current_user.id)
 
-        async def events() -> AsyncGenerator[str, None]:
+        async def events() -> AsyncGenerator[str]:
             try:
                 yield ": connected\n\n"
                 while True:

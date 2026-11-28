@@ -10,15 +10,14 @@ from sqlalchemy.orm import selectinload
 
 from app.domain.entities import Order as DomainOrder
 from app.domain.entities import OrderItem as DomainOrderItem
-from app.domain.modifiers import Modifier as DomainModifier
 from app.domain.enums import OrderStatus
-from app.orm.models import Modifier as ModifierModel
+from app.domain.modifiers import Modifier as DomainModifier
+from app.domain.value_objects import Money
 from app.orm.models import Order as OrderModel
 from app.orm.models import OrderItem as OrderItemModel
 from app.orm.models import OrderItemModifier
 from app.repositories.base import BaseRepository
 from app.repositories.mappers import address, coordinates, join_csv, money_required, split_csv
-from app.domain.value_objects import Money
 
 
 class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
@@ -140,7 +139,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         )
         model.items = [self._item_to_model(item) for item in entity.items]
         return model
-    
+
     async def add(self, entity: DomainOrder) -> DomainOrder:
         """Add order and eagerly load its items with modifiers."""
         model = self._to_model(entity)
@@ -166,7 +165,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         result = await self._session.execute(stmt)
         saved_model = result.scalar_one()
         return self._to_domain(saved_model)
-    
+
     async def update(self, entity: DomainOrder) -> DomainOrder:
         """Update order and eagerly load its items with modifiers."""
         stmt = (
@@ -191,7 +190,7 @@ class OrderRepository(BaseRepository[DomainOrder, OrderModel]):
         result = await self._session.execute(stmt)
         saved_model = result.scalar_one()
         return self._to_domain(saved_model)
-    
+
     async def get(self, entity_id: uuid.UUID) -> DomainOrder | None:
         stmt = (
             select(OrderModel)

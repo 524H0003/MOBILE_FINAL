@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities import Order as DomainOrder
 from app.domain.entities import OrderItem as DomainOrderItem
-from app.domain.modifiers import Modifier as DomainModifier
 from app.domain.enums import DeliveryProvider, OrderStatus, PaymentStatus, PromotionType
+from app.domain.modifiers import Modifier as DomainModifier
 from app.domain.value_objects import Address, Coordinates, Money
 from app.orm.models import Modifier as ModifierModel
 from app.repositories.menu_item import MenuItemRepository
@@ -163,7 +163,10 @@ class OrderService:
             else None
         )
         dropoff_coordinates = (
-            Coordinates(latitude=delivery_address["latitude"], longitude=delivery_address["longitude"])
+            Coordinates(
+                latitude=delivery_address["latitude"] or 0.0,
+                longitude=delivery_address["longitude"] or 0.0,
+            )
             if delivery_address.get("latitude") is not None and delivery_address.get("longitude") is not None
             else None
         )

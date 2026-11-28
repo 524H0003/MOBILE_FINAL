@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
+from math import atan2, cos, radians, sin, sqrt
 from typing import Annotated
 
 from pydantic import AfterValidator, Field
@@ -141,8 +142,6 @@ class Coordinates(ValueObject):
 
     def distance_to(self, other: Coordinates) -> float:
         """Calculate approximate distance in kilometers using Haversine formula."""
-        from math import atan2, cos, radians, sin, sqrt
-
         R = 6371  # Earth radius in km
         lat1, lon1 = radians(self.latitude), radians(self.longitude)
         lat2, lon2 = radians(other.latitude), radians(other.longitude)

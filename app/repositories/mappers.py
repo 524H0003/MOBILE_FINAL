@@ -95,8 +95,35 @@ def dumps_json(data: dict[str, object] | None) -> str | None:
     return json.dumps(data)
 
 
+def dumps_json_schedule(data: dict[str, dict[str, object]] | None) -> str | None:
+    """Serialize schedule dict to JSON string."""
+    if not data:
+        return None
+    return json.dumps(data)
+
+
 def loads_json(value: str | None) -> dict[str, object]:
     """Deserialize JSON string to dict."""
+    if not value:
+        return {}
+    loaded = json.loads(value)
+    if isinstance(loaded, dict):
+        return loaded
+    return {}
+
+
+def loads_json_schedule(value: str | None) -> dict[str, dict[str, object]]:
+    """Deserialize JSON string to dict[str, dict[str, object]] for schedules."""
+    if not value:
+        return {}
+    loaded = json.loads(value)
+    if isinstance(loaded, dict):
+        return loaded
+    return {}
+
+
+def loads_json_dict(value: str | None) -> dict[str, dict[str, object]]:
+    """Deserialize JSON string to dict[str, dict[str, object]]."""
     if not value:
         return {}
     loaded = json.loads(value)

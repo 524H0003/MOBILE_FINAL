@@ -1,9 +1,9 @@
 """Domain enums."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     """User roles in the system."""
 
     CUSTOMER = "CUSTOMER"
@@ -11,7 +11,7 @@ class UserRole(str, Enum):
     STAFF = "STAFF"
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     """Order lifecycle statuses."""
 
     PENDING = "PENDING"
@@ -25,7 +25,7 @@ class OrderStatus(str, Enum):
     REFUNDED = "REFUNDED"
 
 
-class PaymentStatus(str, Enum):
+class PaymentStatus(StrEnum):
     """Payment statuses."""
 
     PENDING = "PENDING"
@@ -35,14 +35,14 @@ class PaymentStatus(str, Enum):
     REFUNDED = "REFUNDED"
 
 
-class DeliveryProvider(str, Enum):
+class DeliveryProvider(StrEnum):
     """Supported delivery providers."""
 
     AHAMOVE = "AHAMOVE"
     LALAMOVE = "LALAMOVE"
 
 
-class DeliveryStatus(str, Enum):
+class DeliveryStatus(StrEnum):
     """Delivery tracking statuses."""
 
     PENDING_DISPATCH = "PENDING_DISPATCH"
@@ -55,7 +55,7 @@ class DeliveryStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
-class PromotionType(str, Enum):
+class PromotionType(StrEnum):
     """Promotion types."""
 
     PERCENTAGE = "PERCENTAGE"
@@ -64,7 +64,7 @@ class PromotionType(str, Enum):
     BUY_X_GET_Y = "BUY_X_GET_Y"
 
 
-class MenuItemStatus(str, Enum):
+class MenuItemStatus(StrEnum):
     """Menu item availability statuses."""
 
     AVAILABLE = "AVAILABLE"
@@ -72,7 +72,7 @@ class MenuItemStatus(str, Enum):
     HIDDEN = "HIDDEN"
 
 
-class RestaurantStatus(str, Enum):
+class RestaurantStatus(StrEnum):
     """Restaurant operational statuses."""
 
     PENDING = "PENDING"
@@ -81,7 +81,7 @@ class RestaurantStatus(str, Enum):
     CLOSED = "CLOSED"
 
 
-class PaymentMethod(str, Enum):
+class PaymentMethod(StrEnum):
     """Supported payment methods."""
 
     CASH = "CASH"
@@ -91,7 +91,7 @@ class PaymentMethod(str, Enum):
     CREDIT_CARD = "CREDIT_CARD"
 
 
-class DiscountType(str, Enum):
+class DiscountType(StrEnum):
     """Promotion discount types."""
 
     PERCENTAGE = "PERCENTAGE"
@@ -99,7 +99,7 @@ class DiscountType(str, Enum):
     FREE_DELIVERY = "FREE_DELIVERY"
 
 
-class PromotionStatus(str, Enum):
+class PromotionStatus(StrEnum):
     """Promotion statuses."""
 
     ACTIVE = "ACTIVE"

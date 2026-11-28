@@ -9,6 +9,7 @@ import pytest
 from app.core.security import TokenError
 from app.domain.enums import UserRole
 from app.domain.value_objects import PhoneNumber
+from app.repositories.user import UserRepository
 from app.services.auth import AuthService
 from tests.factories import create_user
 
@@ -154,8 +155,6 @@ async def test_refresh_tokens_deleted_user_raises(session) -> None:
     _, refresh, _ = await service.login(email="deleted@example.com", password="Password123")
 
     # Delete the user
-    from app.repositories.user import UserRepository
-
     await UserRepository(session).remove(user.id)
 
     with pytest.raises(ValueError, match="User not found or inactive"):

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 
-from app.main import app
+from app.config.settings import get_settings
+from app.main import app, create_app
 from tests.helpers import route_inventory
 
 EXPECTED_ROUTES = {
@@ -70,11 +73,6 @@ def test_docs_routes_are_enabled() -> None:
 
 
 def test_docs_routes_are_independent_of_debug() -> None:
-    import os
-
-    from app.config.settings import get_settings
-    from app.main import create_app
-
     os.environ["DEBUG"] = "false"
     get_settings.cache_clear()
     try:
@@ -89,8 +87,6 @@ def test_docs_routes_are_independent_of_debug() -> None:
 
 
 def test_create_app_returns_independent_app() -> None:
-    from app.main import create_app
-
     other: FastAPI = create_app()
     assert other is not app
     assert EXPECTED_ROUTES - {("GET", "/health"), ("GET", "/health/ready")} <= route_inventory(other)

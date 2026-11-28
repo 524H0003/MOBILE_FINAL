@@ -5,7 +5,9 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from tests.factories import create_category, create_menu_item, create_restaurant, create_user
+from app.domain.enums import OrderStatus
+from app.repositories.order import OrderRepository
+from tests.factories import create_category, create_restaurant
 from tests.helpers import assert_error, assert_page, patch_order_repository_add
 
 
@@ -259,9 +261,6 @@ async def test_reorder_preserves_modifiers(
         order_id = order_resp.json()["id"]
 
     # Mark delivered directly in DB
-    from app.domain.enums import OrderStatus
-    from app.repositories.order import OrderRepository
-
     repo = OrderRepository(session)
     order = await repo.get(uuid.UUID(order_id))
     assert order is not None

@@ -370,7 +370,7 @@ def map_review(review: Review, *, customer_name: str = "") -> ReviewResponse:
     )
 
 
-def map_page(items: list[T], total: int, page: int, size: int) -> Page[T]:
+def map_page[T](items: list[T], total: int, page: int, size: int) -> Page[T]:
     """Build a paginated response."""
     return Page(
         items=items,

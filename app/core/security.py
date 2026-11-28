@@ -23,12 +23,12 @@ class TokenError(Exception):
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password."""
-    return PASSWORD_CONTEXT.hash(password)
+    return str(PASSWORD_CONTEXT.hash(password))
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
     """Verify a plaintext password against a hash."""
-    return PASSWORD_CONTEXT.verify(plain_password, password_hash)
+    return bool(PASSWORD_CONTEXT.verify(plain_password, password_hash))
 
 
 def _create_token(

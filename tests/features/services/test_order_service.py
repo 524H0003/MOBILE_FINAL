@@ -41,7 +41,7 @@ async def test_create_order_success(session, monkeypatch: pytest.MonkeyPatch) ->
     order = await service.create_order(
         customer_id=customer.id,
         restaurant_id=restaurant.id,
-        items=[{"menu_item_id": item.id, "quantity": 2, "special_instructions": "No onions"}],
+        items=[{"menu_item_id": item.id, "quantity": 2, "special_instructions": "No onions", "modifier_ids": []}],
         delivery_address=_delivery_address(),  # type: ignore[arg-type]
         notes="Leave at door",
     )
@@ -91,7 +91,7 @@ async def test_create_order_menu_item_errors(session, monkeypatch: pytest.Monkey
         await service.create_order(
             customer_id=customer.id,
             restaurant_id=restaurant.id,
-            items=[{"menu_item_id": uuid.uuid4(), "quantity": 1, "special_instructions": None}],
+            items=[{"menu_item_id": uuid.uuid4(), "quantity": 1, "special_instructions": None, "modifier_ids": []}],
             delivery_address=_delivery_address(),  # type: ignore[arg-type]
         )
 
@@ -99,7 +99,7 @@ async def test_create_order_menu_item_errors(session, monkeypatch: pytest.Monkey
         await service.create_order(
             customer_id=customer.id,
             restaurant_id=restaurant.id,
-            items=[{"menu_item_id": unavailable.id, "quantity": 1, "special_instructions": None}],
+            items=[{"menu_item_id": unavailable.id, "quantity": 1, "special_instructions": None, "modifier_ids": []}],
             delivery_address=_delivery_address(),  # type: ignore[arg-type]
         )
 
@@ -135,7 +135,7 @@ async def test_create_order_applies_promotions(
     order = await service.create_order(
         customer_id=customer.id,
         restaurant_id=restaurant.id,
-        items=[{"menu_item_id": item.id, "quantity": 1, "special_instructions": None}],
+        items=[{"menu_item_id": item.id, "quantity": 1, "special_instructions": None, "modifier_ids": []}],
         delivery_address=_delivery_address(),  # type: ignore[arg-type]
         promotion_code="SAVE",
     )
@@ -165,7 +165,7 @@ async def test_create_order_percentage_promotion_is_rounded(
     order = await service.create_order(
         customer_id=customer.id,
         restaurant_id=restaurant.id,
-        items=[{"menu_item_id": item.id, "quantity": 1, "special_instructions": None}],
+        items=[{"menu_item_id": item.id, "quantity": 1, "special_instructions": None, "modifier_ids": []}],
         delivery_address=_delivery_address(),  # type: ignore[arg-type]
         promotion_code="SAVE",
     )

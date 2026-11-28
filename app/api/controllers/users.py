@@ -15,6 +15,7 @@ from app.api.schemas.auth import ChangePasswordRequest
 from app.api.schemas.common import Page
 from app.api.schemas.users import UserCreate, UserResponse, UserUpdate
 from app.domain.enums import UserRole
+from app.repositories.user import UserRepository
 from app.services.auth import AuthService
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -43,8 +44,6 @@ class UserController(BaseController):  # type: ignore[misc]
         self, session: DbSession, pagination: PaginationDep, current_user: Any = require_roles(UserRole.STAFF)
     ) -> Page[UserResponse]:
         """List users (staff only)."""
-        from app.repositories.user import UserRepository
-
         repo = UserRepository(session)
         users = await repo.list(limit=pagination.limit, offset=pagination.offset)
         return map_page(
@@ -92,8 +91,6 @@ class UserController(BaseController):  # type: ignore[misc]
         current_user: Any = require_roles(UserRole.STAFF),
     ) -> UserResponse:
         """Update user (staff only)."""
-        from app.repositories.user import UserRepository
-
         repo = UserRepository(session)
         user = await repo.get(user_id)
         if not user:

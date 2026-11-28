@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time
+from datetime import datetime, time
 from decimal import Decimal
 from typing import Annotated, Any
 
@@ -20,8 +20,8 @@ from app.domain.enums import (
     RestaurantStatus,
     UserRole,
 )
-from app.domain.value_objects import Address, Coordinates, Money, PhoneNumber
 from app.domain.modifiers import Modifier, ModifierGroup
+from app.domain.value_objects import Address, Coordinates, Money, PhoneNumber
 
 
 class User(DomainEntity):

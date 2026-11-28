@@ -9,6 +9,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.api.controllers.notifications import NotificationController
 from app.domain.enums import (
     DeliveryStatus,
     OrderStatus,
@@ -182,7 +183,7 @@ async def test_order_creation_rejects_busy_and_closed_restaurants(
         await service.create_order(
             customer_id=customer.id,
             restaurant_id=busy.id,
-            items=[{"menu_item_id": busy_item.id, "quantity": 1, "special_instructions": None}],
+            items=[{"menu_item_id": busy_item.id, "quantity": 1, "special_instructions": None, "modifier_ids": []}],
             delivery_address=_delivery_address(),  # type: ignore[arg-type]
         )
 
@@ -190,7 +191,7 @@ async def test_order_creation_rejects_busy_and_closed_restaurants(
         await service.create_order(
             customer_id=customer.id,
             restaurant_id=closed.id,
-            items=[{"menu_item_id": closed_item.id, "quantity": 1, "special_instructions": None}],
+            items=[{"menu_item_id": closed_item.id, "quantity": 1, "special_instructions": None, "modifier_ids": []}],
             delivery_address=_delivery_address(),  # type: ignore[arg-type]
         )
 
@@ -212,19 +213,24 @@ async def test_voucher_user_usage_limit_blocks_second_order(
         user_usage_limit=1,
     )
     service = OrderService(session)
-    order_input = {
-        "customer_id": customer.id,
-        "restaurant_id": restaurant.id,
-        "items": [{"menu_item_id": item.id, "quantity": 1, "special_instructions": None}],
-        "delivery_address": _delivery_address(),  # type: ignore[arg-type]
-        "promotion_code": "ONCE",
-    }
 
-    first = await service.create_order(**order_input)  # type: ignore[arg-type]
+    first = await service.create_order(
+        customer_id=customer.id,
+        restaurant_id=restaurant.id,
+        items=[{"menu_item_id": item.id, "quantity": 1, "special_instructions": None, "modifier_ids": []}],
+        delivery_address=_delivery_address(),  # type: ignore[arg-type]
+        promotion_code="ONCE",
+    )
     assert first.discount_amount.amount == Decimal("20000")
 
     with pytest.raises(ValueError, match="Promotion usage limit reached"):
-        await service.create_order(**order_input)  # type: ignore[arg-type]
+        await service.create_order(
+            customer_id=customer.id,
+            restaurant_id=restaurant.id,
+            items=[{"menu_item_id": item.id, "quantity": 1, "special_instructions": None, "modifier_ids": []}],
+            delivery_address=_delivery_address(),  # type: ignore[arg-type]
+            promotion_code="ONCE",
+        )
 
 
 async def test_cancelling_prepaid_order_refunds_payment(
@@ -303,14 +309,16 @@ async def test_notification_service_pushes_order_and_delivery_events(
 
 async def test_notification_stream_emits_published_event(customer_user) -> None:
     """The SSE endpoint streams published notification events."""
-    from app.api.controllers.notifications import NotificationController
-
     hub = get_notification_hub()
     response = await NotificationController().stream_notifications(customer_user)
     chunks = response.body_iterator
 
     try:
-        assert await anext(chunks) == ": connected\n\n"
+        # Get the first chunk (connection message)
+        chunk_iterator = chunks.__aiter__()
+        first_chunk = await chunk_iterator.__anext__()
+        first_chunk_str = first_chunk.decode() if isinstance(first_chunk, bytes) else str(first_chunk)
+        assert first_chunk_str == ": connected\n\n"
 
         await hub.publish(
             NotificationEvent(
@@ -324,9 +332,12 @@ async def test_notification_stream_emits_published_event(customer_user) -> None:
             )
         )
 
-        payload = await anext(chunks)
-        assert payload.startswith("event: ORDER_STATUS\ndata: ")
-        data = payload.split("data: ", 1)[1].strip()
+        # Get the next chunk (the actual event)
+        second_chunk = await chunk_iterator.__anext__()
+        second_chunk_str = second_chunk.decode() if isinstance(second_chunk, bytes) else str(second_chunk)
+        assert second_chunk_str.startswith("event: ORDER_STATUS\ndata: ")
+        data = second_chunk_str.split("data: ", 1)[1].strip()
         assert json.loads(data)["message"] == "Quán đang chuẩn bị món"
     finally:
-        await chunks.aclose()
+        if hasattr(chunks, 'aclose'):
+            await chunks.aclose()

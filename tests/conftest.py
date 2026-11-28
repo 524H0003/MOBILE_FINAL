@@ -36,7 +36,7 @@ test_session_maker = async_sessionmaker(
 
 
 @pytest.fixture(autouse=True)
-async def prepare_database() -> AsyncGenerator[None, None]:
+async def prepare_database() -> AsyncGenerator[None]:
     """Create a fresh in-memory database for each test."""
     async with test_engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -46,7 +46,7 @@ async def prepare_database() -> AsyncGenerator[None, None]:
 
 
 @pytest.fixture
-async def session() -> AsyncGenerator[AsyncSession, None]:
+async def session() -> AsyncGenerator[AsyncSession]:
     """Provide a database session bound to the test database."""
     async with test_session_maker() as db_session:
         yield db_session
@@ -60,7 +60,7 @@ def client_factory(session: AsyncSession) -> Iterator[ClientFactory]:
     """Build an HTTP client with optional authenticated user override."""
 
     def factory(user: User | None = None) -> AsyncClient:
-        async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
+        async def override_get_session() -> AsyncGenerator[AsyncSession]:
             yield session
 
         app.dependency_overrides[get_session] = override_get_session
@@ -113,7 +113,7 @@ async def customer_user(session: AsyncSession) -> User:
 
 
 @pytest.fixture
-async def client(client_factory: ClientFactory, staff_user: User) -> AsyncGenerator[AsyncClient, None]:
+async def client(client_factory: ClientFactory, staff_user: User) -> AsyncGenerator[AsyncClient]:
     """Default authenticated client using the staff user."""
     async with client_factory(staff_user) as http_client:
         yield http_client

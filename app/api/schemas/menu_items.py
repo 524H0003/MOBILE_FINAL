@@ -26,7 +26,6 @@ class MenuItemBase(BaseModel):
     is_featured: bool = False
     preparation_time_minutes: int = Field(default=15, ge=0)
     allergens: list[str] = Field(default_factory=list)
-    modifier_groups: list[ModifierGroupCreate] = Field(default_factory=list)
 
 
 class MenuItemCreate(MenuItemBase):
@@ -35,6 +34,7 @@ class MenuItemCreate(MenuItemBase):
     model_config = ConfigDict(extra="forbid")
 
     category_id: UUID
+    modifier_groups: list[ModifierGroupCreate] = Field(default_factory=list)
 
 
 class MenuItemUpdate(BaseModel):
