@@ -54,6 +54,18 @@ async def _add_order_without_lazy_load(self: OrderRepository, entity: DomainOrde
     model = self._to_model(entity)
     self._session.add(model)
     await self._session.flush()
+
+    # Persist order item modifiers to junction table
+    from app.orm.models import OrderItemModifier
+    for item in entity.items:
+        for modifier in item.modifiers:
+            oim = OrderItemModifier(
+                order_item_id=item.id,
+                modifier_id=modifier.id,
+            )
+            self._session.add(oim)
+
+    await self._session.flush()
     await self._session.refresh(model)
     fetched = await self.get(entity.id)
     assert fetched is not None

@@ -29,6 +29,7 @@ from app.domain.enums import (
     PaymentMethod,
     PaymentStatus,
     PromotionType,
+    RestaurantStatus,
     UserRole,
 )
 from app.domain.value_objects import Address, Coordinates, Money, PhoneNumber
@@ -99,6 +100,10 @@ async def create_restaurant(
     owner_id: uuid.UUID | None = None,
     name: str = "Test Restaurant",
     is_active: bool = True,
+    status: RestaurantStatus = RestaurantStatus.ACTIVE,
+    busy_until: datetime | None = None,
+    weekly_schedule: dict[str, dict[str, object]] | None = None,
+    custom_schedules: list[dict[str, object]] | None = None,
     delivery_fee: Decimal = Decimal("30000"),
     min_order_amount: Decimal = Decimal("0"),
     latitude: float | None = 10.0,
@@ -120,6 +125,10 @@ async def create_restaurant(
         delivery_fee=Money(amount=delivery_fee),
         delivery_radius_km=Decimal("5.0"),
         is_active=is_active,
+        status=status,
+        busy_until=busy_until,
+        weekly_schedule=weekly_schedule or {},
+        custom_schedules=custom_schedules or [],
     )
     return await RestaurantRepository(session).add(restaurant)
 
@@ -188,6 +197,7 @@ async def create_promotion(
     max_discount_amount: Decimal | None = None,
     usage_limit: int | None = None,
     usage_count: int = 0,
+    user_usage_limit: int = 1,
     is_active: bool = True,
     start_at: datetime | None = None,
     end_at: datetime | None = None,
@@ -208,6 +218,7 @@ async def create_promotion(
         max_discount_amount=Money(amount=max_discount_amount) if max_discount_amount is not None else None,
         usage_limit=usage_limit,
         usage_count=usage_count,
+        user_usage_limit=user_usage_limit,
         is_active=is_active,
         start_at=start_at or now - timedelta(days=1),
         end_at=end_at or now + timedelta(days=1),
@@ -229,6 +240,7 @@ async def create_order(
     discount: Decimal = Decimal("0"),
     customer_note: str | None = None,
     delivery_address: Address | None = None,
+    delivery_provider: DeliveryProvider = DeliveryProvider.AHAMOVE,
 ) -> Order:
     if customer_id is None:
         customer = await create_user(session, full_name="Order Customer")
@@ -272,6 +284,7 @@ async def create_order(
         promotion_code=promotion_code,
         delivery_address=delivery_address or address(),
         delivery_coordinates=Coordinates(latitude=10.0, longitude=106.0),
+        delivery_provider=delivery_provider,
         customer_note=customer_note,
     )
     for item in order.items:

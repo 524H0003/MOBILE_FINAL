@@ -6,7 +6,6 @@ import uuid
 from decimal import Decimal
 
 import pytest
-from pydantic import ValidationError
 
 from app.domain.enums import MenuItemStatus, OrderStatus, PromotionType
 from app.services.order import OrderService
@@ -109,7 +108,7 @@ async def test_create_order_menu_item_errors(session, monkeypatch: pytest.Monkey
     ("promotion_type", "value", "expected_discount"),
     [
         (PromotionType.FIXED_AMOUNT, Decimal("20000"), Decimal("20000")),
-        (PromotionType.FREE_DELIVERY, Decimal("0"), Decimal("30000")),
+        (PromotionType.FREE_DELIVERY, Decimal("0"), Decimal("0")),
     ],
 )
 async def test_create_order_applies_promotions(
@@ -146,10 +145,10 @@ async def test_create_order_applies_promotions(
     assert order.promotion_code == "SAVE"
 
 
-async def test_create_order_percentage_promotion_decimal_precision_bug(
+async def test_create_order_percentage_promotion_is_rounded(
     session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Percentage promotions currently fail because the discount has four decimals."""
+    """Percentage promotions are rounded to two decimal places."""
     patch_order_repository_add(monkeypatch)
     customer = await create_user(session)
     restaurant = await create_restaurant(session)
@@ -163,14 +162,16 @@ async def test_create_order_percentage_promotion_decimal_precision_bug(
     )
     service = OrderService(session)
 
-    with pytest.raises(ValidationError, match="more than 2 decimal places"):
-        await service.create_order(
-            customer_id=customer.id,
-            restaurant_id=restaurant.id,
-            items=[{"menu_item_id": item.id, "quantity": 1, "special_instructions": None}],
-            delivery_address=_delivery_address(),  # type: ignore[arg-type]
-            promotion_code="SAVE",
-        )
+    order = await service.create_order(
+        customer_id=customer.id,
+        restaurant_id=restaurant.id,
+        items=[{"menu_item_id": item.id, "quantity": 1, "special_instructions": None}],
+        delivery_address=_delivery_address(),  # type: ignore[arg-type]
+        promotion_code="SAVE",
+    )
+
+    assert order.discount_amount.amount == Decimal("10000.00")
+    assert order.total_amount.amount == Decimal("120000.00")
 
 
 async def test_update_order_status_and_cancel(session, monkeypatch: pytest.MonkeyPatch) -> None:
