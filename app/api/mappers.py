@@ -147,9 +147,7 @@ def map_restaurant(restaurant: Restaurant) -> RestaurantResponse:
         delivery_radius_km=restaurant.delivery_radius_km,
         minimum_order_amount=_money(restaurant.min_order_amount),
         delivery_fee=_money(restaurant.delivery_fee),
-        status=(
-            RestaurantStatus.SUSPENDED if not restaurant.is_active else RestaurantStatus(restaurant.status)
-        ),
+        status=(RestaurantStatus.SUSPENDED if not restaurant.is_active else RestaurantStatus(restaurant.status)),
         busy_until=restaurant.busy_until,
         weekly_schedule=restaurant.weekly_schedule,
         custom_schedules=restaurant.custom_schedules,
@@ -166,9 +164,7 @@ def map_restaurant_summary(restaurant: Restaurant) -> RestaurantSummaryResponse:
         id=restaurant.id,
         name=restaurant.name,
         cuisine_type=None,
-        status=(
-            RestaurantStatus.SUSPENDED if not restaurant.is_active else RestaurantStatus(restaurant.status)
-        ),
+        status=(RestaurantStatus.SUSPENDED if not restaurant.is_active else RestaurantStatus(restaurant.status)),
         minimum_order_amount=_money(restaurant.min_order_amount),
         delivery_fee=_money(restaurant.delivery_fee),
         avatar_url=restaurant.logo_url,
@@ -211,10 +207,7 @@ def map_menu_item(item: MenuItem) -> MenuItemResponse:
                 min_selection=group.min_selection,
                 max_selection=group.max_selection,
                 display_order=group.display_order,
-                modifiers=[
-                    ModifierResponse(id=mod.id, name=mod.name, price=mod.price)
-                    for mod in group.modifiers
-                ],
+                modifiers=[ModifierResponse(id=mod.id, name=mod.name, price=mod.price) for mod in group.modifiers],
             )
             for group in item.modifier_groups
         ],
@@ -261,10 +254,7 @@ def map_order_item(item: OrderItem) -> OrderItemResponse:
         quantity=item.quantity,
         subtotal=_money(item.subtotal),
         special_instructions=item.note,
-        modifiers=[
-            ModifierResponse(id=mod.id, name=mod.name, price=mod.price)
-            for mod in item.modifiers
-        ],
+        modifiers=[ModifierResponse(id=mod.id, name=mod.name, price=mod.price) for mod in item.modifiers],
         allergens=item.allergens,
     )
 

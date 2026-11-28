@@ -106,7 +106,9 @@ class OrderController(BaseController):  # type: ignore[misc]
         if order.customer_id != current_user.id and current_user.role != UserRole.STAFF:
             restaurant = await RestaurantRepository(session).get(order.restaurant_id)
             owns_restaurant = (
-                current_user.role == UserRole.OWNER and restaurant is not None and restaurant.owner_id == current_user.id
+                current_user.role == UserRole.OWNER
+                and restaurant is not None
+                and restaurant.owner_id == current_user.id
             )
             if not owns_restaurant:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")

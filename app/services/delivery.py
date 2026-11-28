@@ -59,9 +59,7 @@ class DeliveryService:
             "estimated_duration_minutes": quote.estimated_duration_minutes,
         }
 
-    async def auto_dispatch(
-        self, order_id: uuid.UUID, provider: DeliveryProvider | None = None
-    ) -> DomainDelivery:
+    async def auto_dispatch(self, order_id: uuid.UUID, provider: DeliveryProvider | None = None) -> DomainDelivery:
         """Automatically dispatch delivery for an order."""
         # Check if delivery already exists
         existing = await self._delivery_repo.get_by_order(order_id)

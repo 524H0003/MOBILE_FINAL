@@ -96,9 +96,7 @@ class NotificationService:
     async def notify_order_created(self, order: Order) -> None:
         """Notify the customer and ring the owner's new-order bell."""
         status = OrderStatus(order.status)
-        await self._adapter.send_order_status(
-            user_id=order.customer_id, order_id=order.id, status=status
-        )
+        await self._adapter.send_order_status(user_id=order.customer_id, order_id=order.id, status=status)
         await self._publish(
             user_id=order.customer_id,
             order_id=order.id,
@@ -109,9 +107,7 @@ class NotificationService:
 
         restaurant = await self._restaurant_repo.get(order.restaurant_id)
         if restaurant is not None:
-            await self._adapter.send_order_status(
-                user_id=restaurant.owner_id, order_id=order.id, status=status
-            )
+            await self._adapter.send_order_status(user_id=restaurant.owner_id, order_id=order.id, status=status)
             await self._publish(
                 user_id=restaurant.owner_id,
                 order_id=order.id,
@@ -148,9 +144,7 @@ class NotificationService:
 
         restaurant = await self._restaurant_repo.get(order.restaurant_id)
         if restaurant is not None:
-            await self._adapter.send_delivery_status(
-                user_id=restaurant.owner_id, order_id=order.id, status=normalized
-            )
+            await self._adapter.send_delivery_status(user_id=restaurant.owner_id, order_id=order.id, status=normalized)
             await self._publish(
                 user_id=restaurant.owner_id,
                 order_id=order.id,

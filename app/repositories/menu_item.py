@@ -143,7 +143,6 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
             modifier_groups=modifier_groups,
         )
 
-
     def _to_model(self, entity: DomainMenuItem) -> MenuItemModel:
         model = MenuItemModel(
             id=entity.id,
@@ -189,9 +188,7 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
             price=modifier.price.amount,
         )
 
-    async def _update_modifier_groups(
-        self, model: MenuItemModel, entity: DomainMenuItem
-    ) -> None:
+    async def _update_modifier_groups(self, model: MenuItemModel, entity: DomainMenuItem) -> None:
         """Update modifier groups and their modifiers."""
         existing_group_ids = {g.id for g in model.modifier_groups}
         new_group_ids = {g.id for g in entity.modifier_groups}
@@ -236,9 +233,7 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
             else:
                 await self._create_new_modifier(group_model, modifier)
 
-    async def _update_existing_modifier(
-        self, group_model: ModifierGroupModel, modifier: DomainModifier
-    ) -> None:
+    async def _update_existing_modifier(self, group_model: ModifierGroupModel, modifier: DomainModifier) -> None:
         """Update an existing modifier."""
         mod_stmt = select(ModifierModel).where(ModifierModel.id == modifier.id)
         mod_result = await self._session.execute(mod_stmt)
@@ -248,16 +243,12 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
             mod_model.price = modifier.price.amount
             mod_model.updated_at = modifier.updated_at
 
-    async def _create_new_modifier(
-        self, group_model: ModifierGroupModel, modifier: DomainModifier
-    ) -> None:
+    async def _create_new_modifier(self, group_model: ModifierGroupModel, modifier: DomainModifier) -> None:
         """Create a new modifier."""
         mod_model = self._modifier_to_model(group_model, modifier)
         self._session.add(mod_model)
 
-    async def _create_new_group(
-        self, entity: DomainMenuItem, domain_group: DomainModifierGroup
-    ) -> None:
+    async def _create_new_group(self, entity: DomainMenuItem, domain_group: DomainModifierGroup) -> None:
         """Create a new modifier group with its modifiers."""
         group_model = self._modifier_group_to_model(entity, domain_group)
         self._session.add(group_model)
@@ -309,4 +300,3 @@ class MenuItemRepository(BaseRepository[DomainMenuItem, MenuItemModel]):
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(model) for model in result.scalars().all()]
-

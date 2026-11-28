@@ -40,10 +40,12 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
         finally:
             await session.close()
 
+
 async def get_session() -> AsyncGenerator[AsyncSession]:
     """FastAPI dependency: yield a session, commit/rollback via get_db."""
     async with get_db() as session:
         yield session
+
 
 async def init_db() -> None:
     """Initialize database tables."""

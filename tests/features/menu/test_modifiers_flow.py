@@ -209,10 +209,7 @@ async def test_order_invalid_modifier_id(client_factory, session, owner_user, cu
         item = created.json()
 
     size_id = next(
-        mod["id"]
-        for group in item["modifier_groups"]
-        for mod in group["modifiers"]
-        if mod["name"] == "Large"
+        mod["id"] for group in item["modifier_groups"] for mod in group["modifiers"] if mod["name"] == "Large"
     )
 
     async with client_factory(customer_user) as client:
@@ -228,9 +225,7 @@ async def test_order_invalid_modifier_id(client_factory, session, owner_user, cu
         assert "Invalid modifier IDs" in resp.json()["detail"]
 
 
-async def test_reorder_preserves_modifiers(
-    client_factory, session, owner_user, customer_user, monkeypatch
-) -> None:
+async def test_reorder_preserves_modifiers(client_factory, session, owner_user, customer_user, monkeypatch) -> None:
     """Reorder carries modifiers from the original delivered order."""
     patch_order_repository_add(monkeypatch)
     restaurant = await create_restaurant(session, owner_id=owner_user.id)

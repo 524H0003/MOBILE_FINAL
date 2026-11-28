@@ -349,9 +349,7 @@ class ModifierGroup(Base, TimestampMixin):
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     menu_item: Mapped[MenuItem] = relationship("MenuItem", back_populates="modifier_groups")
-    modifiers: Mapped[list[Modifier]] = relationship(
-        "Modifier", back_populates="group", cascade="all, delete-orphan"
-    )
+    modifiers: Mapped[list[Modifier]] = relationship("Modifier", back_populates="group", cascade="all, delete-orphan")
 
 
 class Modifier(Base, TimestampMixin):
@@ -379,4 +377,3 @@ class OrderItemModifier(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("order_item_id", "modifier_id", name="uq_order_item_modifiers_order_item_modifier"),
     )
-

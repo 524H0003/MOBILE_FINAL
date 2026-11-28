@@ -145,9 +145,7 @@ async def test_create_order_applies_promotions(
     assert order.promotion_code == "SAVE"
 
 
-async def test_create_order_percentage_promotion_is_rounded(
-    session, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_create_order_percentage_promotion_is_rounded(session, monkeypatch: pytest.MonkeyPatch) -> None:
     """Percentage promotions are rounded to two decimal places."""
     patch_order_repository_add(monkeypatch)
     customer = await create_user(session)

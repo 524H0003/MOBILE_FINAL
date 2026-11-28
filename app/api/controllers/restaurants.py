@@ -138,7 +138,6 @@ class RestaurantController(BaseController):  # type: ignore[misc]
         if restaurant.owner_id != current_user.id and current_user.role != UserRole.STAFF:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
-
         update_data = request.model_dump(exclude_unset=True)
         field_aliases = {
             "minimum_order_amount": "min_order_amount",

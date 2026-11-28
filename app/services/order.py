@@ -145,9 +145,7 @@ class OrderService:
 
         return order_items, subtotal
 
-    async def _load_modifiers(
-        self, menu_item: DomainMenuItem, modifier_ids: list[uuid.UUID]
-    ) -> list[DomainModifier]:
+    async def _load_modifiers(self, menu_item: DomainMenuItem, modifier_ids: list[uuid.UUID]) -> list[DomainModifier]:
         """Load and validate modifiers for a menu item."""
         if not modifier_ids:
             return []
@@ -168,13 +166,9 @@ class OrderService:
             group_modifier_ids = [mid for mid in modifier_ids if any(m.id == mid for m in group.modifiers)]
             selected_count = len(group_modifier_ids)
             if selected_count < group.min_selection:
-                raise ValueError(
-                    f"Modifier group '{group.name}' requires at least {group.min_selection} selection(s)"
-                )
+                raise ValueError(f"Modifier group '{group.name}' requires at least {group.min_selection} selection(s)")
             if selected_count > group.max_selection:
-                raise ValueError(
-                    f"Modifier group '{group.name}' allows at most {group.max_selection} selection(s)"
-                )
+                raise ValueError(f"Modifier group '{group.name}' allows at most {group.max_selection} selection(s)")
 
         # Load the modifier domain entities
         modifiers: list[DomainModifier] = []
